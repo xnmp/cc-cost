@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from cc_cost.domain import Session
+from cc_cost.domain import Provider, Session
 from cc_cost.jsonl import read_json, read_jsonl
+from cc_cost.picker import SessionSummary, pick_session
 from cc_cost.providers.auto import parse_session
 from cc_cost.providers.claude import parse_claude_agent
 
@@ -59,6 +60,83 @@ def _open_paths(paths: list[Path]) -> set[Path] | None:
     }
 
 
+def _message_text(content: object) -> str | None:
+    if isinstance(content, str):
+        values = [content]
+    elif isinstance(content, list):
+        values = [
+            block["text"]
+            for block in content
+            if isinstance(block, dict)
+            and block.get("type") in {"text", "input_text"}
+            and isinstance(block.get("text"), str)
+        ]
+    else:
+        return None
+    ignored_prefixes = (
+        "<local-command",
+        "<command-",
+        "<recommended_plugins>",
+        "# AGENTS.md instructions",
+        "<environment_context>",
+        "<permissions instructions>",
+        "<collaboration_mode>",
+        "<apps_instructions>",
+        "<plugins_instructions>",
+        "<skills_instructions>",
+    )
+    for value in values:
+        normalized = " ".join(value.split())
+        if normalized and not normalized.startswith(ignored_prefixes):
+            return normalized
+    return None
+
+
+def _session_title(path: Path, provider: Provider) -> str:
+    fallback: str | None = None
+    for index, event in enumerate(read_jsonl(path)):
+        if index >= 128:
+            break
+        if provider == "claude":
+            if event.get("type") in {"ai-title", "custom-title"}:
+                title = _message_text(
+                    event.get("aiTitle") or event.get("customTitle") or event.get("title")
+                )
+                if title:
+                    return title
+            if event.get("type") == "user" and fallback is None:
+                message = event.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                fallback = _message_text(content)
+        elif event.get("type") == "session_meta":
+            payload = event.get("payload")
+            if isinstance(payload, dict):
+                title = _message_text(payload.get("title") or payload.get("name"))
+                if title:
+                    return title
+        elif event.get("type") == "event_msg":
+            payload = event.get("payload")
+            if isinstance(payload, dict) and payload.get("type") == "user_message":
+                title = _message_text(payload.get("message"))
+                if title:
+                    return title
+        elif event.get("type") == "response_item":
+            payload = event.get("payload")
+            if (
+                isinstance(payload, dict)
+                and payload.get("type") == "message"
+                and payload.get("role") == "user"
+            ):
+                title = _message_text(payload.get("content"))
+                if title:
+                    return title
+    return fallback or "(untitled session)"
+
+
+def _provider(path: Path) -> Provider:
+    return "codex" if path.name.startswith("rollout-") else "claude"
+
+
 @dataclass(frozen=True, slots=True)
 class SessionGraph:
     root: Session
@@ -93,19 +171,21 @@ class SessionRepository:
             return running[0]
         if len(paths) == 1 or not os.isatty(0):
             return paths[0]
-        print("Sessions in this directory:")
-        for number, path in enumerate(paths[:20], 1):
-            provider = "Codex" if path.name.startswith("rollout-") else "Claude"
-            marker = " (running)" if path in running else ""
-            timestamp = path.stat().st_mtime
-            print(f"  {number:>2}. {provider:<6} {timestamp:.0f}{marker}  {path.stem[:48]}")
-        try:
-            selected = int(input("Select session [1]: ") or "1")
-        except (EOFError, ValueError):
-            selected = 1
-        if not 1 <= selected <= min(20, len(paths)):
-            raise ValueError("invalid session selection")
-        return paths[selected - 1]
+        summaries = []
+        for path in paths:
+            stat = path.stat()
+            provider = _provider(path)
+            summaries.append(
+                SessionSummary(
+                    path=path,
+                    provider=provider,
+                    title=_session_title(path, provider),
+                    modified_at=stat.st_mtime,
+                    size=stat.st_size,
+                    running=path in running,
+                )
+            )
+        return pick_session(summaries)
 
     def related(self, root_path: Path) -> SessionGraph:
         root = parse_session(root_path)

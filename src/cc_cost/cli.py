@@ -74,6 +74,8 @@ def main() -> None:
     except (FileNotFoundError, UnknownModelError, ValueError) as error:
         print(f"cc-cost: {error}", file=sys.stderr)
         raise SystemExit(2) from error
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

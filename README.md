@@ -6,12 +6,16 @@ chart. It does not call a model or upload transcript content.
 
 Claude and Codex use the same report UI:
 
-- per-turn and per-step views
+- per-turn and per-pass views
 - normalized or raw cost bars
 - component and subagent segments
 - nested subagent drill-down with breadcrumbs
 - minimap selection, cursor-centered zoom, and keyboard reset
 - terminal-theme colors read from Ghostty or WezTerm
+
+Session discovery opens a searchable, keyboard-selectable list with human-readable
+titles. Use arrow keys or PageUp/PageDown to move through every matching session,
+type to filter by title, and press Enter to select.
 
 ## Why it has a domain model
 

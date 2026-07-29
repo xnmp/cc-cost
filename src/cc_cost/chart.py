@@ -119,7 +119,7 @@ def build_chart(
             "title": "subagent",
             "subtitle": session.label,
             "model": dominant(session_id),
-            "kind": "step",
+            "kind": "pass",
             "total": float(rolled.total),
             "steps": len(session.steps),
             "sub_steps": analyzer.subtree_steps(session_id) - len(session.steps),
@@ -185,10 +185,10 @@ def build_chart(
         "bars": turn_bars,
     }
     nodes["root_steps"] = {
-        "title": "Session cost by step",
+        "title": "Session cost by pass",
         "subtitle": root.provider.title(),
         "model": nodes["root"]["model"],
-        "kind": "step",
+        "kind": "pass",
         "total": float(root_total.total),
         "steps": len(root.steps),
         "sub_steps": analysis.subagent_steps,

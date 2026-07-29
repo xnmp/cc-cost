@@ -41,7 +41,7 @@ def terminal_report(analysis: SessionAnalysis) -> str:
         f"transcript : {root.path}",
         f"turns      : {len(visible)}"
         + (f"  ({', '.join(turn_notes)})" if turn_notes else ""),
-        f"steps      : {len(root.steps)}"
+        f"passes     : {len(root.steps)}"
         + (f"  (+{analysis.subagent_steps} subagent)" if analysis.subagent_steps else ""),
         f"total cost : {format_usd(analysis.total_cost.total)}",
         "by component:",
@@ -61,7 +61,7 @@ def terminal_report(analysis: SessionAnalysis) -> str:
             continue
         share = value / total * 100 if total else Decimal(0)
         lines.append(f"  {label:<12}{format_usd(value):>8}  ({share:4.1f}%)")
-    lines.extend(["", f"{'turn':>4} {'steps':>6} {'cost':>8} {'$/step':>8}"])
+    lines.extend(["", f"{'turn':>4} {'passes':>6} {'cost':>8} {'$/pass':>8}"])
     for item in visible:
         steps = len(item.turn.steps)
         cost = item.total_cost.total

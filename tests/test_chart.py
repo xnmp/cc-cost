@@ -7,7 +7,7 @@ from cc_cost.domain import Session, Step, TokenUsage, Turn
 from cc_cost.repository import SessionGraph
 
 
-def test_chart_preserves_turn_step_and_subagent_drilldown_contract() -> None:
+def test_chart_preserves_turn_pass_and_subagent_drilldown_contract() -> None:
     root = Session(
         id="root",
         provider="codex",
@@ -51,7 +51,7 @@ def test_chart_preserves_turn_step_and_subagent_drilldown_contract() -> None:
 
     assert set(nodes) == {"root", "root_steps", "child"}
     assert nodes["root"]["kind"] == "turn"
-    assert nodes["root_steps"]["kind"] == "step"
+    assert nodes["root_steps"]["kind"] == "pass"
     assert len(nodes["root"]["bars"]) == 1
     assert len(nodes["root_steps"]["bars"]) == 2
     assert nodes["root"]["bars"][0]["subs"][0]["id"] == "child"

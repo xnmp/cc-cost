@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from cc_cost.repository import SessionRepository
+from cc_cost.repository import SessionRepository, _session_title
 
 
 def _write(path: Path, events: list[dict[str, Any]]) -> None:
@@ -156,3 +156,38 @@ def test_choose_checks_all_running_sessions_with_one_lsof_call(
     assert selected == second
     assert len(calls) == 1
     assert calls[0][-2:] == [str(first), str(second)]
+
+
+def test_claude_title_prefers_generated_title_over_first_prompt(tmp_path: Path) -> None:
+    transcript = tmp_path / "claude.jsonl"
+    _write(
+        transcript,
+        [
+            {"type": "user", "message": {"content": "Initial long prompt"}},
+            {"type": "ai-title", "aiTitle": "Human-readable session title"},
+        ],
+    )
+
+    assert _session_title(transcript, "claude") == "Human-readable session title"
+
+
+def test_codex_title_skips_injected_context_and_uses_user_request(tmp_path: Path) -> None:
+    transcript = tmp_path / "rollout-session.jsonl"
+    _write(
+        transcript,
+        [
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "# AGENTS.md instructions\n..."},
+                        {"type": "input_text", "text": "Make session names searchable"},
+                    ],
+                },
+            }
+        ],
+    )
+
+    assert _session_title(transcript, "codex") == "Make session names searchable"

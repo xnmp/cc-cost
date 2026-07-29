@@ -122,9 +122,9 @@ _SHELL = """
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <button id="back" class="backbtn" type="button" onclick="goBack()">&larr; back</button>
       <label class="tgl"><input type="checkbox" id="perstep" onchange="setBase()">
-        <span class="tr" aria-hidden="true"></span>per-step bars</label>
+        <span class="tr" aria-hidden="true"></span>per-pass bars</label>
       <label class="tgl"><input type="checkbox" id="norm" checked onchange="setMode()">
-        <span class="tr" aria-hidden="true"></span><span id="normlbl">normalize by steps</span></label>
+        <span class="tr" aria-hidden="true"></span><span id="normlbl">normalize by passes</span></label>
       <label class="tgl"><input type="checkbox" id="subs" checked onchange="toggleSubs()">
         <span class="tr" aria-hidden="true"></span>show subagents</label>
     </div>
@@ -137,7 +137,7 @@ _SHELL = """
   <section class="panel card"><h2>cost breakdown</h2><div class="col" id="breakdown"></div></section>
   <section class="panel card"><h2>summary</h2><div class="kv" id="summary"></div></section>
 </div>
-<aside class="note">Bars = cost per <b id="unitn">turn</b> (toggle: divide by step count, or raw),
+<aside class="note">Bars = cost per <b id="unitn">turn</b> (toggle: divide by pass count, or raw),
 stacked by component; subagent segments use model colors. Hover for exact cost; click or press Enter
 on a subagent segment to open its graph. <b>Zoom:</b> scroll around the cursor, drag across the
 minimap, or double-click/Escape to reset. Output includes reasoning/thinking tokens.
@@ -181,7 +181,7 @@ function render(){
   var norm=document.getElementById("norm"),stepKind=node.kind!=="turn";
   norm.disabled=stepKind;norm.parentElement.style.opacity=stepKind?".4":"";
   norm.parentElement.style.cursor=stepKind?"default":"pointer";
-  document.getElementById("normlbl").textContent=stepKind?"per step (already finest grain)":"normalize by steps";
+  document.getElementById("normlbl").textContent=stepKind?"per pass (already finest grain)":"normalize by passes";
   buildStats(node);redraw(node);
 }
 function redraw(node){drawChart(node);buildMini(node);}
@@ -193,11 +193,11 @@ function buildStats(node){
   rows.push('<div class="tot"><span style="flex:1">total</span><b>'+fmt(node.total)+'</b><span style="width:48px"></span></div>');
   document.getElementById("breakdown").innerHTML=rows.join("");
   var nb=node.bars.length,steps=node.steps,subs=node.sub_steps||0,unit=node.kind;
-  var kv=(node.kind==="turn"?"turns":"steps")+"&nbsp;&nbsp;<b>"+nb+"</b><br>";
-  if(node.kind==="turn")kv+="steps&nbsp;&nbsp;<b>"+steps+"</b><br>";
-  if(subs)kv+="subagent steps&nbsp;&nbsp;<b>"+subs+"</b><br>";
+  var kv=(node.kind==="turn"?"turns":"passes")+"&nbsp;&nbsp;<b>"+nb+"</b><br>";
+  if(node.kind==="turn")kv+="passes&nbsp;&nbsp;<b>"+steps+"</b><br>";
+  if(subs)kv+="subagent passes&nbsp;&nbsp;<b>"+subs+"</b><br>";
   kv+="avg cost / "+unit+"&nbsp;&nbsp;<b>"+fmt(node.total/(nb||1))+"</b><br>";
-  kv+="avg cost / step&nbsp;&nbsp;<b>"+fmt(node.total/(((node.kind==="turn"?steps:nb)+subs)||1))+"</b>";
+  kv+="avg cost / pass&nbsp;&nbsp;<b>"+fmt(node.total/(((node.kind==="turn"?steps:nb)+subs)||1))+"</b>";
   document.getElementById("summary").innerHTML=kv;
 }
 function drawChart(node){
@@ -230,11 +230,11 @@ function drawChart(node){
   }
   if(turnKind){var pts=[];for(var i=s0;i<=e0&&i<bars.length;i++){var k=i-s0;pts.push((padL+k*band+band/2).toFixed(1)+","+ys(bars[i].steps).toFixed(1));}
     s.push('<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+STEPS+'" stroke-width="2" opacity=".9"/>');
-    for(var i=s0;i<=e0&&i<bars.length;i++){var k=i-s0,cx=padL+k*band+band/2;s.push('<circle cx="'+cx.toFixed(1)+'" cy="'+ys(bars[i].steps).toFixed(1)+'" r="3" fill="'+STEPS+'" data-tip="'+esc("turn "+bars[i].label+": "+bars[i].steps+" steps")+'"></circle>');}}
-  var mid=padT+plotH/2,yl=turnKind?(mode==="per_step"?"cost / step":"cost / turn"):"cost / step";
+    for(var i=s0;i<=e0&&i<bars.length;i++){var k=i-s0,cx=padL+k*band+band/2;s.push('<circle cx="'+cx.toFixed(1)+'" cy="'+ys(bars[i].steps).toFixed(1)+'" r="3" fill="'+STEPS+'" data-tip="'+esc("turn "+bars[i].label+": "+bars[i].steps+" passes")+'"></circle>');}}
+  var mid=padT+plotH/2,yl=turnKind?(mode==="per_step"?"cost / pass":"cost / turn"):"cost / pass";
   s.push('<text x="15" y="'+mid+'" font-size="12" class="axt2" transform="rotate(-90 15 '+mid+')" text-anchor="middle">'+yl+"</text>");
-  if(turnKind)s.push('<text x="'+(W-13)+'" y="'+mid+'" font-size="12" fill="'+STEPS+'" transform="rotate(90 '+(W-13)+" "+mid+')" text-anchor="middle">steps</text>');
-  s.push('<text x="'+(padL+plotW/2).toFixed(0)+'" y="'+(H-6)+'" font-size="12" class="axt2" text-anchor="middle">'+(turnKind?"turn":"step")+"</text></svg>");
+  if(turnKind)s.push('<text x="'+(W-13)+'" y="'+mid+'" font-size="12" fill="'+STEPS+'" transform="rotate(90 '+(W-13)+" "+mid+')" text-anchor="middle">passes</text>');
+  s.push('<text x="'+(padL+plotW/2).toFixed(0)+'" y="'+(H-6)+'" font-size="12" class="axt2" text-anchor="middle">'+(turnKind?"turn":"pass")+"</text></svg>");
   document.getElementById("chart").innerHTML=s.join("");
 }
 function barTotalDiv(b){var d=(mode==="per_step"&&b.steps)?b.steps:1;return segsFor(b,d).reduce(function(a,x){return a+x.v;},0);}

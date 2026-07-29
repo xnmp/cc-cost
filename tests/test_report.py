@@ -39,6 +39,8 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     document = output.read_text(encoding="utf-8")
 
     assert "provider   : codex" in text
+    assert "passes     : 1" in text
+    assert "$/pass" in text
     assert "total cost : $5.00" in text
     assert "Session cost by turn" in document
     assert '"total": 5.0' in document
@@ -47,6 +49,8 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert 'id="subs"' in document
     assert "buildMini" in document
     assert "openAgent" in document
+    assert "per-pass bars" in document
+    assert "normalize by passes" in document
 
 
 def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path) -> None:

@@ -39,14 +39,24 @@ def _codex_parent(metadata: dict[str, Any]) -> str | None:
     return str(spawn["parent_thread_id"])
 
 
-def _is_open(path: Path) -> bool | None:
+def _open_paths(paths: list[Path]) -> set[Path] | None:
+    if not paths:
+        return set()
     try:
         result = subprocess.run(
-            ["lsof", "-t", "--", str(path)], capture_output=True, timeout=5, check=False
+            ["lsof", "-F", "n", "--", *(str(path) for path in paths)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return None
-    return result.returncode == 0 and bool(result.stdout.strip())
+    return {
+        Path(line[1:])
+        for line in result.stdout.splitlines()
+        if line.startswith("n") and line[1:]
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +87,8 @@ class SessionRepository:
     def choose(self, paths: list[Path]) -> Path:
         if not paths:
             raise FileNotFoundError("no Claude Code or Codex transcript found")
-        running = [path for path in paths if _is_open(path)]
+        open_paths = _open_paths(paths)
+        running = [path for path in paths if open_paths is not None and path in open_paths]
         if len(running) == 1:
             return running[0]
         if len(paths) == 1 or not os.isatty(0):

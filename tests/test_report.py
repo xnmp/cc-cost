@@ -1,6 +1,11 @@
+import re
+import shutil
+import subprocess
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from cc_cost.analysis import CostAnalyzer
 from cc_cost.domain import Session, Step, TokenUsage, Turn
@@ -68,3 +73,36 @@ def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path)
 
     assert document.count("</script>") == 1
     assert "\\u003c/script\\u003e" in document
+
+
+def test_generated_javascript_parses(tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for generated JavaScript validation")
+    session = Session(
+        id="root",
+        provider="codex",
+        path=Path("/transcript.jsonl"),
+        cwd=Path("/work"),
+        started_at=None,
+        turns=(Turn(1, (Step("gpt-5.6-sol", TokenUsage(input=1)),)),),
+    )
+    analysis = CostAnalyzer(
+        SessionGraph(root=session, sessions={"root": session}, children={})
+    ).analyze()
+    output = tmp_path / "report.html"
+    script = tmp_path / "report.js"
+    render_interactive_html(analysis, output, theme=TerminalTheme.system())
+    document = output.read_text(encoding="utf-8")
+    match = re.search(r"<script>([\s\S]+)</script>", document)
+    assert match is not None
+    script.write_text(match.group(1), encoding="utf-8")
+
+    result = subprocess.run(
+        [node, "--check", str(script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

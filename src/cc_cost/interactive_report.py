@@ -223,7 +223,7 @@ function drawChart(node){
       var attr='data-tip="'+esc(label)+'"';
       if(g.sub)attr+=' class="clk" data-id="'+esc(g.id)+'" tabindex="0" role="button" aria-label="'+esc(label)+'"';
       s.push('<rect x="'+x.toFixed(1)+'" y="'+y1.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="'+r+'" fill="'+g.color+'" '+attr+"></rect>");
-      if(r&&h>r)s.push('<rect x="'+x.toFixed(1)+'" y="'+(y1+r).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+(h-r).toFixed(1)+'" fill="'+g.color+'" pointer-events="none" aria-hidden="true"></rect>");
+      if(r&&h>r)s.push('<rect x="'+x.toFixed(1)+'" y="'+(y1+r).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+(h-r).toFixed(1)+'" fill="'+g.color+'" pointer-events="none" aria-hidden="true"></rect>');
       if(j<segs.length-1&&h>1.5)s.push('<rect x="'+x.toFixed(1)+'" y="'+(y1-.6).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="1.3" class="sep" pointer-events="none"></rect>');acc+=g.v;
     });
     if(k%labelEvery===0)s.push('<text x="'+cx.toFixed(1)+'" y="'+(padT+plotH+16)+'" text-anchor="middle" font-size="10" class="axt">'+b.label+"</text>");

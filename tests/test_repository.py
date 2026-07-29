@@ -1,6 +1,9 @@
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from cc_cost.repository import SessionRepository
 
@@ -130,3 +133,26 @@ def test_claude_graph_uses_tool_use_ids(tmp_path: Path) -> None:
 
     assert graph.children == {"root": ("tool-1",)}
     assert graph.sessions["tool-1"].label == "review"
+
+
+def test_choose_checks_all_running_sessions_with_one_lsof_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "first.jsonl"
+    second = tmp_path / "second.jsonl"
+    first.touch()
+    second.touch()
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=f"p123\nn{second}\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    selected = SessionRepository(home=tmp_path).choose([first, second])
+
+    assert selected == second
+    assert len(calls) == 1
+    assert calls[0][-2:] == [str(first), str(second)]

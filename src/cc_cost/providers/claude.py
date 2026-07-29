@@ -5,7 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from cc_cost.domain import Session, Step, TokenUsage, Turn
+from cc_cost.content import message_blocks, tail, unique
+from cc_cost.domain import ContentBlock, PassTrace, Session, Step, TokenUsage, Turn
 from cc_cost.jsonl import read_jsonl
 
 
@@ -61,20 +62,37 @@ class _StepRecord:
     usage: TokenUsage
     spawn_ids: set[str] = field(default_factory=set)
     subagent: bool = False
+    input_blocks: tuple[ContentBlock, ...] = ()
+    output_blocks: list[ContentBlock] = field(default_factory=list)
+    cached_preview: tuple[ContentBlock, ...] = ()
+    cached_preview_truncated: bool = False
 
 
 def _assistant_steps(
-    entries: tuple[dict[str, Any], ...], *, include_sidechains: bool
-) -> tuple[Step, ...]:
+    entries: tuple[dict[str, Any], ...],
+    *,
+    include_sidechains: bool,
+    prior_context: tuple[ContentBlock, ...] = (),
+) -> tuple[tuple[Step, ...], tuple[ContentBlock, ...]]:
     grouped: dict[str, _StepRecord] = {}
     order: list[str] = []
+    context = list(prior_context)
+    pending_input: list[ContentBlock] = []
     for offset, event in enumerate(entries):
-        if event.get("type") != "assistant" or event.get("isApiErrorMessage") is True:
+        event_type = event.get("type")
+        message = event.get("message")
+        if event_type == "user" and isinstance(message, dict):
+            blocks = message_blocks(message, default_role="user")
+            pending_input.extend(blocks)
+            context.extend(blocks)
+            continue
+        if event_type != "assistant" or event.get("isApiErrorMessage") is True:
             continue
         is_sidechain = bool(event.get("isSidechain"))
         if is_sidechain and not include_sidechains:
             continue
-        message = event.get("message", {})
+        if not isinstance(message, dict):
+            continue
         model = str(message.get("model") or "")
         if model == "<synthetic>":
             continue
@@ -85,19 +103,38 @@ def _assistant_steps(
                 model=model,
                 usage=_usage(message.get("usage") or {}),
                 subagent=is_sidechain,
+                input_blocks=tuple(pending_input),
             )
+            record.cached_preview, record.cached_preview_truncated = tail(context)
+            pending_input.clear()
             grouped[message_id] = record
             order.append(message_id)
         record.spawn_ids.update(_spawn_ids(message))
-    return tuple(
-        Step(
-            model=grouped[message_id].model,
-            usage=grouped[message_id].usage,
-            spawn_ids=tuple(sorted(grouped[message_id].spawn_ids)),
-            subagent=grouped[message_id].subagent,
-        )
-        for message_id in order
-        if grouped[message_id].usage.total
+        output = message_blocks(message, default_role="assistant")
+        existing = set(record.output_blocks)
+        additions = [item for item in output if item not in existing]
+        record.output_blocks.extend(additions)
+        context.extend(additions)
+    return (
+        tuple(
+            Step(
+                model=grouped[message_id].model,
+                usage=grouped[message_id].usage,
+                spawn_ids=tuple(sorted(grouped[message_id].spawn_ids)),
+                subagent=grouped[message_id].subagent,
+                trace=PassTrace(
+                    input=grouped[message_id].input_blocks,
+                    output=unique(grouped[message_id].output_blocks),
+                    cached_preview=grouped[message_id].cached_preview,
+                    cached_preview_truncated=grouped[
+                        message_id
+                    ].cached_preview_truncated,
+                ),
+            )
+            for message_id in order
+            if grouped[message_id].usage.total
+        ),
+        tuple(context),
     )
 
 
@@ -110,9 +147,14 @@ def parse_claude(path: Path) -> Session:
     ]
     boundaries.append(len(entries))
     turns: list[Turn] = []
+    context: tuple[ContentBlock, ...] = ()
 
     for number, (start, end) in enumerate(zip(boundaries, boundaries[1:], strict=False), 1):
-        steps = _assistant_steps(entries[start + 1 : end], include_sidechains=True)
+        steps, context = _assistant_steps(
+            entries[start:end],
+            include_sidechains=True,
+            prior_context=context,
+        )
         turns.append(
             Turn(
                 number=number,
@@ -134,7 +176,7 @@ def parse_claude(path: Path) -> Session:
 
 def parse_claude_agent(path: Path, *, tool_use_id: str, label: str) -> Session:
     entries = tuple(read_jsonl(path))
-    steps = _assistant_steps(entries, include_sidechains=True)
+    steps, _ = _assistant_steps(entries, include_sidechains=True)
     first = entries[0] if entries else {}
     return Session(
         id=tool_use_id,

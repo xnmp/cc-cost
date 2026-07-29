@@ -31,7 +31,7 @@ def test_claude_deduplicates_streamed_messages_and_unions_spawn_ids(tmp_path: Pa
                     },
                     "output_tokens": 10,
                 },
-                "content": [],
+                "content": [{"type": "text", "text": "Working on it"}],
             },
         },
         {
@@ -53,6 +53,9 @@ def test_claude_deduplicates_streamed_messages_and_unions_spawn_ids(tmp_path: Pa
     assert session.steps[0].spawn_ids == ("tool-1",)
     assert session.steps[0].usage.cache_write == 50
     assert session.steps[0].usage.total == 210
+    assert session.steps[0].trace.input[0].text == "do work"
+    assert session.steps[0].trace.output[0].text == "Working on it"
+    assert session.steps[0].trace.cached_preview[0].text == "do work"
 
 
 def test_claude_excludes_tool_results_as_user_turns_and_synthetic_steps(tmp_path: Path) -> None:
@@ -88,4 +91,3 @@ def test_claude_excludes_tool_results_as_user_turns_and_synthetic_steps(tmp_path
     assert len(session.turns) == 2
     assert len(session.turns[0].steps) == 1
     assert session.turns[1].steps == ()
-

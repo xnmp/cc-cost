@@ -96,6 +96,30 @@ svg .sep { fill: var(--panel) }
   border: 1px solid var(--tipbd); color: var(--tiptext); font-size: 12px;
   padding: 5px 9px; border-radius: 7px; display: none; z-index: 20;
   max-width: 340px; box-shadow: 0 6px 20px color-mix(in srgb, __BG__ 70%, transparent) }
+.inspect { width: min(820px, calc(100vw - 24px)); max-height: min(82vh, 900px);
+  padding: 0; color: var(--text); background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 14px; box-shadow: 0 18px 60px color-mix(in srgb, __BG__ 55%, transparent) }
+.inspect::backdrop { background: color-mix(in srgb, __BG__ 72%, transparent) }
+.ih { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between;
+  gap: 16px; align-items: flex-start; padding: 16px 18px; background: var(--panel);
+  border-bottom: 1px solid var(--border) }
+.ih h2 { margin: 0; font-size: 17px; letter-spacing: -.01em }
+.imeta { color: var(--muted); font-size: 12px; margin-top: 4px }
+.iclose { border: 1px solid var(--border2); background: var(--border); color: var(--text);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer }
+.iclose:focus-visible { outline: 2px solid var(--selection-bg); outline-offset: 2px }
+.ibody { padding: 16px 18px 20px }
+.inote { color: var(--note); font-size: 12px; line-height: 1.55; margin: 0 0 14px }
+.passhead { color: var(--axis2); font-size: 11px; font-weight: 650; text-transform: uppercase;
+  letter-spacing: .06em; margin: 18px 0 8px }
+.passhead:first-child { margin-top: 0 }
+.trace { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin: 0 0 8px }
+.tracehead { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px;
+  background: var(--hover); color: var(--muted); font-size: 11px }
+.tracehead b { color: var(--axis2); font-weight: 650 }
+.trace pre { margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--text); font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace }
+.iempty { color: var(--muted); padding: 20px 0; text-align: center }
 .note { color: var(--note); font-size: 12px; margin-top: 18px; line-height: 1.6 }
 @media (max-width: 640px) {
   body { padding: 20px 12px }
@@ -144,6 +168,11 @@ minimap, or double-click/Escape to reset. Output includes reasoning/thinking tok
 Theme: <b id="themeName"></b>, read from <span id="themeSource"></span>.</aside>
 </main>
 <div id="tip" class="tip" role="tooltip"></div>
+<dialog id="inspect" class="inspect" aria-labelledby="ititle">
+  <div class="ih"><div><h2 id="ititle"></h2><div id="imeta" class="imeta"></div></div>
+    <button id="iclose" class="iclose" type="button">close</button></div>
+  <div class="ibody"><p id="inote" class="inote"></p><div id="icontent"></div></div>
+</dialog>
 """
 
 _JS = r"""
@@ -158,7 +187,7 @@ function curKey(){return stack[stack.length-1];}
 function tipEl(){return document.getElementById("tip");}
 function contW(){return document.getElementById("scroll").clientWidth||900;}
 function segsFor(bar,div){
-  var out=COMPS.map(function(c){var raw=bar.comps[c[0]];return {color:c[2],v:raw/div,raw:raw,type:c[1],sub:false};});
+  var out=COMPS.map(function(c){var raw=bar.comps[c[0]];return {key:c[0],color:c[2],v:raw/div,raw:raw,type:c[1],sub:false};});
   if(showSubs)bar.subs.forEach(function(s){out.push({color:mh(s.model),v:s.total/div,raw:s.total,type:s.model+" subagent — "+s.label,sub:true,id:s.id});});
   return out;
 }
@@ -186,6 +215,25 @@ function render(){
 }
 function redraw(node){drawChart(node);buildMini(node);}
 function crow(c,l,amt,total){return '<div class="row"><span class="sw" style="background:'+c+'"></span><span class="lb">'+esc(l)+"</span><b>"+fmt(amt)+'</b><span class="pct">'+(total?(amt/total*100).toFixed(1):"0.0")+"%</span></div>";}
+function inspectField(comp){return comp==="output"?"output":comp==="input"?"input":"cached";}
+function openInspect(barIndex,comp){
+  var bar=cur().bars[barIndex],ids=bar.pass_ids||[],field=inspectField(comp),tokens=0;
+  var labels={input:"uncached input",cache_read:"cache read",cache_write:"cache write",output:"output"};
+  var sections=ids.map(function(id,n){var p=PASSES[id];if(!p)return "";tokens+=p.usage[comp]||0;
+    var blocks=p[field]||[],head='<div class="passhead">pass '+(n+1)+' · '+esc(p.model)+'</div>';
+    if(!blocks.length)return head+'<div class="iempty">No readable content was recorded for this pass.</div>';
+    return head+blocks.map(function(b){var label=b.label||b.kind.replace("_"," ");
+      return '<section class="trace"><div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(b.role)+'</span></div><pre>'+esc(b.text)+'</pre></section>';}).join("");
+  }).join("");
+  var cached=field==="cached",truncated=ids.some(function(id){return PASSES[id]&&PASSES[id].cached_truncated;});
+  document.getElementById("ititle").textContent=labels[comp]+" content";
+  document.getElementById("imeta").textContent=tokens.toLocaleString()+" billed tokens · "+ids.length+" pass"+(ids.length===1?"":"es");
+  document.getElementById("inote").textContent=cached
+    ? "Recorded context preview for each pass"+(truncated?", limited to roughly the last 2,000 tokens.":".")+" Provider transcripts expose counts, not token IDs or exact cache boundaries."
+    : "Readable transcript content associated with this billed segment. The provider token count is exact; hidden or provider-assembled prompt content may not be present in the transcript.";
+  document.getElementById("icontent").innerHTML=sections||'<div class="iempty">No readable content was recorded for this segment.</div>';
+  document.getElementById("inspect").showModal();
+}
 function buildStats(node){
   var total=node.total||1e-12;
   var rows=COMPS.map(function(c){return crow(c[2],c[1],node.comp_tot[c[0]],total);});
@@ -222,6 +270,7 @@ function drawChart(node){
       var label=g.type+" · "+fmt(g.raw)+(g.sub?" · open subagent":"");
       var attr='data-tip="'+esc(label)+'"';
       if(g.sub)attr+=' class="clk" data-id="'+esc(g.id)+'" tabindex="0" role="button" aria-label="'+esc(label)+'"';
+      else attr+=' class="clk" data-comp="'+g.key+'" data-bi="'+i+'" tabindex="0" role="button" aria-label="'+esc("inspect "+g.type+" content")+'"';
       s.push('<rect x="'+x.toFixed(1)+'" y="'+y1.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="'+r+'" fill="'+g.color+'" '+attr+"></rect>");
       if(r&&h>r)s.push('<rect x="'+x.toFixed(1)+'" y="'+(y1+r).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+(h-r).toFixed(1)+'" fill="'+g.color+'" pointer-events="none" aria-hidden="true"></rect>');
       if(j<segs.length-1&&h>1.5)s.push('<rect x="'+x.toFixed(1)+'" y="'+(y1-.6).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="1.3" class="sep" pointer-events="none"></rect>');acc+=g.v;
@@ -262,13 +311,15 @@ function resetZoom(){var node=cur();win={s:0,e:Math.max(0,node.bars.length-1)};r
 (function(){
   document.getElementById("themeName").textContent=THEME.name;document.getElementById("themeSource").textContent=THEME.source;
   var chart=document.getElementById("chart");chart.addEventListener("mousemove",showTip);chart.addEventListener("mouseleave",function(){tipEl().style.display="none";});
-  chart.addEventListener("click",function(e){openAgent(e.target&&e.target.getAttribute&&e.target.getAttribute("data-id"));});
-  chart.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var id=e.target&&e.target.getAttribute&&e.target.getAttribute("data-id");if(id){e.preventDefault();openAgent(id);}});
+  chart.addEventListener("click",function(e){var t=e.target;if(!t||!t.getAttribute)return;var id=t.getAttribute("data-id"),comp=t.getAttribute("data-comp");if(id)openAgent(id);else if(comp)openInspect(Number(t.getAttribute("data-bi")),comp);});
+  chart.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var t=e.target;if(!t||!t.getAttribute)return;var id=t.getAttribute("data-id"),comp=t.getAttribute("data-comp");if(id){e.preventDefault();openAgent(id);}else if(comp){e.preventDefault();openInspect(Number(t.getAttribute("data-bi")),comp);}});
   chart.addEventListener("dblclick",resetZoom);chart.addEventListener("wheel",function(e){e.preventDefault();var node=cur(),r=chart.getBoundingClientRect(),pos=CH.s0+(e.clientX-r.left-CH.padL)/CH.band,m=win.e-win.s+1,f=e.deltaY>0?1.25:.8,nm=Math.max(3,Math.min(node.bars.length,Math.round(m*f))),ns=Math.round(pos-(pos-win.s)*(nm/m));ns=Math.max(0,Math.min(node.bars.length-nm,ns));win={s:ns,e:ns+nm-1};redraw(node);},{passive:false});
   var mini=document.getElementById("mini");mini.addEventListener("dblclick",resetZoom);mini.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();resetZoom();}});
   mini.addEventListener("mousedown",function(e){e.preventDefault();msel={a:miniBarAt(e),moved:false};});
   window.addEventListener("mousemove",function(e){if(!msel)return;var b=miniBarAt(e);if(b!==msel.a)msel.moved=true;var node=cur();win={s:Math.min(msel.a,b),e:Math.max(msel.a,b)};redraw(node);});
-  window.addEventListener("mouseup",function(){msel=null;});document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var node=cur();if(win&&(win.s>0||win.e<node.bars.length-1))resetZoom();else goBack();});
+  window.addEventListener("mouseup",function(){msel=null;});document.addEventListener("keydown",function(e){if(e.key!=="Escape"||document.getElementById("inspect").open)return;var node=cur();if(win&&(win.s>0||win.e<node.bars.length-1))resetZoom();else goBack();});
+  document.getElementById("iclose").addEventListener("click",function(){document.getElementById("inspect").close();});
+  document.getElementById("inspect").addEventListener("click",function(e){if(e.target===this)this.close();});
   var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(function(){redraw(cur());},120);});render();
 })();
 """
@@ -316,7 +367,9 @@ def render_interactive_html(
     theme: TerminalTheme | None = None,
 ) -> None:
     active_theme = theme or read_terminal_theme()
-    nodes, model_colors, models = build_chart(analysis, active_theme.model_colors)
+    nodes, passes, model_colors, models = build_chart(
+        analysis, active_theme.model_colors
+    )
     components = (
         ("cache_read", "cache read", active_theme.chart_colors["cache_read"]),
         ("cache_write", "cache write", active_theme.chart_colors["cache_write"]),
@@ -326,6 +379,8 @@ def render_interactive_html(
     config = (
         "const NODES="
         + _json_for_script(nodes)
+        + ";const PASSES="
+        + _json_for_script(passes)
         + ";const COMPS="
         + _json_for_script(components)
         + ";const MODEL_HEX="

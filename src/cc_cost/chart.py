@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from cc_cost.analysis import CostAnalyzer, SessionAnalysis
-from cc_cost.domain import Cost, Session, Step
+from cc_cost.domain import ContentBlock, Cost, Session, Step
 from cc_cost.pricing import PricingCatalog
 
 
@@ -17,7 +17,12 @@ def build_chart(
     analysis: SessionAnalysis,
     model_palette: tuple[str, ...],
     pricing: PricingCatalog | None = None,
-) -> tuple[dict[str, dict[str, Any]], dict[str, str], tuple[str, ...]]:
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
+    dict[str, str],
+    tuple[str, ...],
+]:
     """Translate provider-neutral sessions into the original interactive chart contract."""
     catalog = pricing or PricingCatalog()
     graph = analysis.graph
@@ -55,6 +60,33 @@ def build_chart(
         model: model_palette[index % len(model_palette)]
         for index, model in enumerate(all_models)
     }
+    pass_details: dict[str, dict[str, Any]] = {}
+
+    def content(item: ContentBlock) -> dict[str, str]:
+        return {
+            "role": item.role,
+            "kind": item.kind,
+            "text": item.text,
+            "label": item.label,
+        }
+
+    def pass_id(session: Session, index: int) -> str:
+        key = f"{session.id}:{index}"
+        step = session.steps[index]
+        pass_details[key] = {
+            "model": model_name(session, step),
+            "usage": {
+                "input": step.usage.input,
+                "cache_read": step.usage.cache_read,
+                "cache_write": step.usage.cache_write,
+                "output": step.usage.output,
+            },
+            "input": [content(item) for item in step.trace.input],
+            "output": [content(item) for item in step.trace.output],
+            "cached": [content(item) for item in step.trace.cached_preview],
+            "cached_truncated": step.trace.cached_preview_truncated,
+        }
+        return key
 
     def dominant(session_id: str) -> str | None:
         by_model = costs_by_model(session_id)
@@ -110,6 +142,7 @@ def build_chart(
                     "comps": cost.as_floats(),
                     "steps": 1,
                     "subs": [segment(child_id) for child_id in children],
+                    "pass_ids": [pass_id(session, index)],
                 }
             )
         direct = graph.children.get(session_id, ())
@@ -133,9 +166,14 @@ def build_chart(
     turn_bars: list[dict[str, Any]] = []
     root_step_bars: list[dict[str, Any]] = []
     all_direct: list[str] = []
+    root_pass_index = 0
     for turn in root.turns:
         if not turn.steps:
             continue
+        turn_pass_indexes = tuple(
+            range(root_pass_index, root_pass_index + len(turn.steps))
+        )
+        root_pass_index += len(turn.steps)
         direct = tuple(
             child_id
             for child_id in by_turn.get(turn.number, ())
@@ -149,6 +187,7 @@ def build_chart(
                 "comps": own.as_floats(),
                 "steps": len(turn.steps),
                 "subs": [segment(child_id) for child_id in direct],
+                "pass_ids": [pass_id(root, index) for index in turn_pass_indexes],
             }
         )
         exact = {
@@ -160,7 +199,9 @@ def build_chart(
         fallback = len(turn.steps) - 1
         for child_id in direct:
             allocated[exact.get(child_id, fallback)].append(child_id)
-        for index, step in enumerate(turn.steps):
+        for index, (step, session_index) in enumerate(
+            zip(turn.steps, turn_pass_indexes, strict=True)
+        ):
             children = allocated.get(index, ())
             root_step_bars.append(
                 {
@@ -168,6 +209,7 @@ def build_chart(
                     "comps": step_cost(root, step).as_floats(),
                     "steps": 1,
                     "subs": [segment(child_id) for child_id in children],
+                    "pass_ids": [pass_id(root, session_index)],
                 }
             )
 
@@ -196,4 +238,4 @@ def build_chart(
         "submodel": submodel(all_direct),
         "bars": root_step_bars,
     }
-    return nodes, model_colors, all_models
+    return nodes, pass_details, model_colors, all_models

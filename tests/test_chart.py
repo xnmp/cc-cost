@@ -44,7 +44,7 @@ def test_chart_preserves_turn_pass_and_subagent_drilldown_contract() -> None:
     )
     analysis = CostAnalyzer(graph).analyze()
 
-    nodes, colors, models = build_chart(
+    nodes, passes, colors, models = build_chart(
         analysis,
         ("color-1", "color-2", "color-3"),
     )
@@ -52,6 +52,8 @@ def test_chart_preserves_turn_pass_and_subagent_drilldown_contract() -> None:
     assert set(nodes) == {"root", "root_steps", "child"}
     assert nodes["root"]["kind"] == "turn"
     assert nodes["root_steps"]["kind"] == "pass"
+    assert nodes["root"]["bars"][0]["pass_ids"] == ["root:0", "root:1"]
+    assert passes["root:0"]["usage"]["input"] == 1_000_000
     assert len(nodes["root"]["bars"]) == 1
     assert len(nodes["root_steps"]["bars"]) == 2
     assert nodes["root"]["bars"][0]["subs"][0]["id"] == "child"

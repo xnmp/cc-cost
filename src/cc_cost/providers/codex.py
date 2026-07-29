@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from cc_cost.domain import Session, Step, TokenUsage, Turn
+from cc_cost.content import block, message_blocks, tail, unique
+from cc_cost.domain import ContentBlock, PassTrace, Session, Step, TokenUsage, Turn
 from cc_cost.jsonl import read_jsonl
 
 
@@ -68,6 +69,44 @@ def _agent_label(source: object) -> str:
     return str(spawn.get("agent_path") or spawn.get("agent_nickname") or "")
 
 
+def _response_blocks(payload: dict[str, Any]) -> tuple[ContentBlock, ...]:
+    payload_type = payload.get("type")
+    if payload_type == "message":
+        return message_blocks(payload, default_role=str(payload.get("role") or "unknown"))
+    if payload_type == "function_call":
+        item = block(
+            "assistant",
+            "tool_call",
+            payload.get("arguments"),
+            label=str(payload.get("name") or "tool"),
+        )
+        return (item,) if item else ()
+    if payload_type == "function_call_output":
+        item = block(
+            "tool",
+            "tool_result",
+            payload.get("output"),
+            label=str(payload.get("call_id") or "tool result"),
+        )
+        return (item,) if item else ()
+    if payload_type == "reasoning":
+        summary = payload.get("summary")
+        if not isinstance(summary, list):
+            return ()
+        texts = [
+            item["text"]
+            for item in summary
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ]
+        item = block("assistant", "reasoning", "\n\n".join(texts), label="reasoning")
+        return (item,) if item else ()
+    return ()
+
+
+def _is_input(block: ContentBlock) -> bool:
+    return block.role in {"user", "developer", "system", "tool"}
+
+
 def parse_codex(path: Path) -> Session:
     meta: dict[str, Any] = {}
     turns: list[Turn] = []
@@ -75,6 +114,8 @@ def parse_codex(path: Path) -> Session:
     started_at: datetime | None = None
     current_model = ""
     previous_total = (0, 0, 0, 0)
+    context: list[ContentBlock] = []
+    pending: list[ContentBlock] = []
 
     for event in read_jsonl(path):
         event_type = event.get("type")
@@ -86,6 +127,9 @@ def parse_codex(path: Path) -> Session:
             continue
         if event_type == "turn_context":
             current_model = str(payload.get("model") or current_model)
+            continue
+        if event_type == "response_item":
+            pending.extend(item for item in _response_blocks(payload) if item not in pending)
             continue
         if event_type != "event_msg":
             continue
@@ -116,7 +160,23 @@ def parse_codex(path: Path) -> Session:
                 usage = _usage_from_delta(last, (0, 0, 0, 0)) if last else None
             previous_total = total
             if steps is not None and usage is not None and usage.total:
-                steps.append(Step(model=current_model, usage=usage))
+                input_blocks = unique(item for item in pending if _is_input(item))
+                output_blocks = unique(item for item in pending if not _is_input(item))
+                cached_preview, truncated = tail((*context, *input_blocks))
+                steps.append(
+                    Step(
+                        model=current_model,
+                        usage=usage,
+                        trace=PassTrace(
+                            input=input_blocks,
+                            output=output_blocks,
+                            cached_preview=cached_preview,
+                            cached_preview_truncated=truncated,
+                        ),
+                    )
+                )
+                context.extend(unique(pending))
+                pending.clear()
             continue
         if payload_type in {"task_complete", "turn_aborted"} and steps is not None:
             turns.append(

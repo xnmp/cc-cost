@@ -50,6 +50,22 @@ def test_codex_uses_cumulative_deltas_and_deduplicates_snapshots(tmp_path: Path)
             "type": "event_msg",
             "payload": {"type": "task_started", "started_at": 1_767_225_600},
         },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "inspect this pass"}],
+            },
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "First response"}],
+            },
+        },
         _token((100, 40, 10, 5), (100, 40, 10, 5)),
         _token((100, 40, 10, 5), (100, 40, 10, 5)),
         _token((180, 60, 10, 12), (80, 20, 0, 7)),
@@ -71,6 +87,8 @@ def test_codex_uses_cumulative_deltas_and_deduplicates_snapshots(tmp_path: Path)
     assert session.steps[0].usage.cache_write_5m == 10
     assert session.steps[1].usage.input == 60
     assert session.steps[1].usage.output == 7
+    assert session.steps[0].trace.input[0].text == "inspect this pass"
+    assert session.steps[0].trace.output[0].text == "First response"
 
 
 def test_codex_attributes_active_model_per_turn_and_keeps_live_turn(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from cc_cost.analysis import CostAnalyzer
-from cc_cost.domain import Session, Step, TokenUsage, Turn
+from cc_cost.domain import ContentBlock, PassTrace, Session, Step, TokenUsage, Turn
 from cc_cost.interactive_report import render_interactive_html
 from cc_cost.report import render_html, terminal_report
 from cc_cost.repository import SessionGraph
@@ -25,7 +25,28 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
         turns=(
             Turn(
                 1,
-                (Step("gpt-5.6-sol", TokenUsage(input=1_000_000)),),
+                (
+                    Step(
+                        "gpt-5.6-sol",
+                        TokenUsage(input=1_000_000),
+                        trace=PassTrace(
+                            input=(
+                                ContentBlock(
+                                    "user",
+                                    "message",
+                                    "Explain the selected tokens",
+                                ),
+                            ),
+                            output=(
+                                ContentBlock(
+                                    "assistant",
+                                    "message",
+                                    "Here is the explanation",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
             ),
         ),
     )
@@ -51,6 +72,11 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert "openAgent" in document
     assert "per-pass bars" in document
     assert "normalize by passes" in document
+    assert 'input:"uncached input"' in document
+    assert "Explain the selected tokens" in document
+    assert "Readable transcript content associated" in document
+    assert 'id="inspect"' in document
+    assert 'data-comp="' in document
 
 
 def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path) -> None:
@@ -61,7 +87,26 @@ def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path)
         cwd=Path("/work"),
         started_at=None,
         label="</script><script>alert(1)</script>",
-        turns=(Turn(1, (Step("gpt-5.6-sol", TokenUsage(input=1)),)),),
+        turns=(
+            Turn(
+                1,
+                (
+                    Step(
+                        "gpt-5.6-sol",
+                        TokenUsage(input=1),
+                        trace=PassTrace(
+                            input=(
+                                ContentBlock(
+                                    "user",
+                                    "message",
+                                    "</script><script>alert('trace')</script>",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
     )
     analysis = CostAnalyzer(
         SessionGraph(root=session, sessions={"root": session}, children={})

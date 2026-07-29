@@ -10,12 +10,29 @@ Claude and Codex use the same report UI:
 - normalized or raw cost bars
 - component and subagent segments
 - nested subagent drill-down with breadcrumbs
+- click or keyboard-open chart segments to inspect associated transcript content
 - minimap selection, cursor-centered zoom, and keyboard reset
 - terminal-theme colors read from Ghostty or WezTerm
 
 Session discovery opens a searchable, keyboard-selectable list with human-readable
 titles. Use arrow keys or PageUp/PageDown to move through every matching session,
 type to filter by title, and press Enter to select.
+
+## Content inspector
+
+Select an input, output, cache-read, or cache-write segment to see its exact
+provider-reported token count and the readable transcript blocks associated with
+each contributing pass. Messages, reasoning summaries, tool calls, and tool
+results are formatted separately.
+
+Provider transcripts do not contain token IDs, the complete provider-assembled
+prompt, or exact cache boundaries. Cached segments therefore show a bounded
+preview of the recorded context—roughly the last 2,000 tokens per pass—and label
+that limitation in the report.
+
+The generated HTML is local and self-contained, but it now embeds these transcript
+excerpts. Treat the report as sensitive and do not publish it without reviewing
+its contents.
 
 ## Why it has a domain model
 

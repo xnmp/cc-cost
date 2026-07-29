@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 Provider = Literal["claude", "codex"]
+ContentKind = Literal["message", "reasoning", "tool_call", "tool_result", "system"]
 ZERO = Decimal(0)
 
 
@@ -40,11 +41,28 @@ class TokenUsage:
 
 
 @dataclass(frozen=True, slots=True)
+class ContentBlock:
+    role: str
+    kind: ContentKind
+    text: str
+    label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PassTrace:
+    input: tuple[ContentBlock, ...] = ()
+    output: tuple[ContentBlock, ...] = ()
+    cached_preview: tuple[ContentBlock, ...] = ()
+    cached_preview_truncated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Step:
     model: str
     usage: TokenUsage
     spawn_ids: tuple[str, ...] = ()
     subagent: bool = False
+    trace: PassTrace = PassTrace()
 
 
 @dataclass(frozen=True, slots=True)

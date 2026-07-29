@@ -24,6 +24,7 @@ _CSS = """
   --hover: color-mix(in srgb, __FG__ 10%, transparent);
   --selection-bg: __SEL_BG__; --selection-fg: __SEL_FG__;
   --cache-read: __CACHE_READ__;
+  --patch-add: __PATCH_ADD__; --patch-delete: __PATCH_DELETE__;
 }
 * { box-sizing: border-box }
 ::selection { background: var(--selection-bg); color: var(--selection-fg) }
@@ -166,6 +167,32 @@ svg .sep { fill: var(--panel) }
 .toolpart > summary:focus-visible { outline: 2px solid var(--selection-bg);
   outline-offset: -2px }
 .toolpart > .jsontree, .toolpart > pre { border-top: 1px solid var(--border) }
+.patchview { border-top: 1px solid var(--border);
+  font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace }
+.patchstats { display: flex; align-items: center; gap: 10px; min-height: 34px;
+  padding: 6px 11px; border-bottom: 1px solid var(--border);
+  color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif }
+.patchstats b { color: var(--axis2); font-size: 11px; font-weight: 650 }
+.patchstats .pa { color: var(--patch-add) }
+.patchstats .pd { color: var(--patch-delete) }
+.patchlines { max-height: min(58vh, 620px); overflow: auto; padding: 7px 0;
+  scrollbar-gutter: stable }
+.pline { display: grid; grid-template-columns: 38px minmax(max-content, 1fr);
+  min-height: 18px; color: var(--axis2) }
+.plno { padding: 0 8px 0 4px; color: var(--muted); opacity: .58;
+  text-align: right; user-select: none; font-variant-numeric: tabular-nums }
+.pcode { display: block; padding: 0 12px 0 8px; white-space: pre }
+.pline.add { color: color-mix(in srgb, var(--patch-add) 78%, var(--text));
+  background: color-mix(in srgb, var(--patch-add) 10%, transparent) }
+.pline.delete { color: color-mix(in srgb, var(--patch-delete) 78%, var(--text));
+  background: color-mix(in srgb, var(--patch-delete) 10%, transparent) }
+.pline.file { color: var(--text); background: var(--hover); font-weight: 650;
+  margin: 6px 0 3px; border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border) }
+.pline.file:first-child { margin-top: -7px; border-top: 0 }
+.pline.file .pcode { padding-top: 5px; padding-bottom: 5px }
+.pline.hunk { color: var(--cache-read); margin: 3px 0 }
+.pline.boundary { color: var(--muted); font-weight: 650 }
 .jsontree { padding: 8px 10px 10px; color: var(--axis2);
   font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
 .jsonnode { margin: 1px 0 }
@@ -309,12 +336,33 @@ function jsonTree(value,depth){
 function parsedJson(text){
   try{return JSON.parse(text);}catch(e){return undefined;}
 }
+function patchLineKind(line){
+  if(/^\*\*\* (Add|Update|Delete|Move to) File:/.test(line))return "file";
+  if(/^@@/.test(line))return "hunk";
+  if(/^\*\*\* (Begin|End) Patch/.test(line))return "boundary";
+  if(line.charAt(0)==="+")return "add";
+  if(line.charAt(0)==="-")return "delete";
+  return "context";
+}
+function patchContent(text){
+  var lines=text.replace(/\r\n?/g,"\n").split("\n"),files=0,adds=0,deletes=0;
+  var rows=lines.map(function(line,index){
+    var kind=patchLineKind(line);
+    if(kind==="file")files++;
+    else if(kind==="add")adds++;
+    else if(kind==="delete")deletes++;
+    return '<div class="pline '+kind+'"><span class="plno">'+(index+1)+'</span><code class="pcode">'+esc(line||" ")+"</code></div>";
+  }).join("");
+  var fileLabel=files+" file"+(files===1?"":"s");
+  return '<div class="patchview"><div class="patchstats"><b>'+fileLabel+'</b><span class="pa">+'+adds+'</span><span class="pd">−'+deletes+'</span></div><div class="patchlines" role="region" aria-label="Patch contents">'+rows+"</div></div>";
+}
 function traceClass(block){
   if(block.kind==="message")return "message "+(block.role==="user"?"user":block.role==="assistant"?"assistant":"other");
   if(block.kind==="tool_call"||block.kind==="tool_result")return "tool";
   return "other";
 }
-function toolContent(block){
+function toolContent(block,name){
+  if(name==="apply_patch"&&/^\*\*\* Begin Patch(?:\r?\n|$)/.test(block.text))return patchContent(block.text);
   var value=parsedJson(block.text);
   return value===undefined?"<pre>"+esc(block.text)+"</pre>":'<div class="jsontree">'+jsonTree(value,0)+"</div>";
 }
@@ -322,13 +370,13 @@ function toolName(block){
   var label=block&&block.label||"";
   return !label||label.indexOf("call_")===0||label==="tool"||label==="tool result"?"tool":label;
 }
-function toolPart(label,block,open){
+function toolPart(label,block,open,name){
   if(!block)return "";
-  return '<details class="toolpart"'+(open?" open":"")+'><summary>'+esc(label)+"</summary>"+toolContent(block)+"</details>";
+  return '<details class="toolpart"'+(open?" open":"")+'><summary>'+esc(label)+"</summary>"+toolContent(block,name)+"</details>";
 }
 function toolExchangeMarkup(call,result){
   var name=toolName(call||result),parts=(call?"arguments":"")+(call&&result?" · ":"")+(result?"result":"");
-  return '<details class="trace tool"><summary class="tracehead" aria-label="'+esc(name)+" tool exchange"+'"><span class="tooltag">tool</span><b class="toolname">'+esc(name)+'</b><span class="toolmeta">'+esc(parts)+"</span></summary><div class=\"toolparts\">"+toolPart("Arguments",call,true)+toolPart("Result",result,!call)+"</div></details>";
+  return '<details class="trace tool"><summary class="tracehead" aria-label="'+esc(name)+" tool exchange"+'"><span class="tooltag">tool</span><b class="toolname">'+esc(name)+'</b><span class="toolmeta">'+esc(parts)+"</span></summary><div class=\"toolparts\">"+toolPart("Arguments",call,true,name)+toolPart("Result",result,!call,name)+"</div></details>";
 }
 function traceMarkup(block){
   var label=block.label||block.kind.replace("_"," "),head='<div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(block.role)+"</span></div>";
@@ -457,7 +505,9 @@ function setBase(){base=document.getElementById("perstep").checked?"root_steps":
 function setMode(){if(document.getElementById("norm").disabled)return;mode=document.getElementById("norm").checked?"per_step":"total";render();}
 function toggleSubs(){showSubs=document.getElementById("subs").checked;render();}
 function resetZoom(){var node=cur();win={s:0,e:Math.max(0,node.bars.length-1)};redraw(node);}
-(function(){
+if(typeof module!=="undefined"&&module.exports){
+  module.exports={patchLineKind:patchLineKind,patchContent:patchContent};
+}else{(function(){
   document.getElementById("themeName").textContent=THEME.name;document.getElementById("themeSource").textContent=THEME.source;
   var chart=document.getElementById("chart");chart.addEventListener("mousemove",showTip);chart.addEventListener("mouseleave",function(){tipEl().style.display="none";});
   chart.addEventListener("click",function(e){var t=e.target;if(!t||!t.getAttribute)return;var id=t.getAttribute("data-id"),comp=t.getAttribute("data-comp");if(id)openAgent(id);else if(comp)openInspect(Number(t.getAttribute("data-bi")),comp);});
@@ -470,7 +520,7 @@ function resetZoom(){var node=cur();win={s:0,e:Math.max(0,node.bars.length-1)};r
   document.getElementById("iclose").addEventListener("click",function(){document.getElementById("inspect").close();});
   document.getElementById("inspect").addEventListener("click",function(e){if(e.target===this)this.close();});
   var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(function(){redraw(cur());},120);});render();
-})();
+})();}
 """
 
 
@@ -491,6 +541,8 @@ def _themed_css(theme: TerminalTheme) -> str:
         "__SEL_BG__": theme.selection_background,
         "__SEL_FG__": theme.selection_foreground,
         "__CACHE_READ__": theme.chart_colors["cache_read"],
+        "__PATCH_ADD__": theme.palette[10],
+        "__PATCH_DELETE__": theme.palette[9],
     }
     result = _CSS
     for marker, value in replacements.items():

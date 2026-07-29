@@ -1,3 +1,4 @@
+import json
 import re
 import shutil
 import subprocess
@@ -181,3 +182,71 @@ def test_generated_javascript_parses(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_generated_patch_renderer_formats_multi_file_malformed_and_huge_inputs(
+    tmp_path: Path,
+) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for generated JavaScript validation")
+    session = Session(
+        id="root",
+        provider="codex",
+        path=Path("/transcript.jsonl"),
+        cwd=Path("/work"),
+        started_at=None,
+        turns=(Turn(1, (Step("gpt-5.6-sol", TokenUsage(input=1)),)),),
+    )
+    analysis = CostAnalyzer(
+        SessionGraph(root=session, sessions={"root": session}, children={})
+    ).analyze()
+    output = tmp_path / "report.html"
+    script = tmp_path / "report.cjs"
+    render_interactive_html(analysis, output, theme=TerminalTheme.system())
+    document = output.read_text(encoding="utf-8")
+    match = re.search(r"<script>([\s\S]+)</script>", document)
+    assert match is not None
+    script.write_text(match.group(1), encoding="utf-8")
+    patch = """*** Begin Patch
+*** Update File: src/a.py
+@@
+-old <value>
++new <value>
+*** Add File: src/b.py
++created
+*** End Patch"""
+    program = f"""
+const renderer=require({json.dumps(str(script))});
+const html=renderer.patchContent({json.dumps(patch)});
+const malformed=renderer.patchContent("*** Begin Patch\\nunknown\\n*** End Patch");
+const huge=renderer.patchContent(
+  "*** Begin Patch\\n*** Add File: huge.txt\\n+"+
+  "x".repeat(100000)+"\\n*** End Patch"
+);
+console.log(JSON.stringify({{
+  files:(html.match(/class="pline file"/g)||[]).length,
+  additions:(html.match(/class="pline add"/g)||[]).length,
+  deletions:(html.match(/class="pline delete"/g)||[]).length,
+  escaped:html.includes("&lt;value&gt;"),
+  malformed:malformed.includes("<b>0 files</b>"),
+  huge:huge.length>100000&&huge.includes("<b>1 file</b>")
+}}));
+"""
+
+    result = subprocess.run(
+        [node, "-e", program],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "files": 2,
+        "additions": 2,
+        "deletions": 1,
+        "escaped": True,
+        "malformed": True,
+        "huge": True,
+    }

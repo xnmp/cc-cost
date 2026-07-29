@@ -71,21 +71,38 @@ def _agent_label(source: object) -> str:
 
 def _response_blocks(payload: dict[str, Any]) -> tuple[ContentBlock, ...]:
     payload_type = payload.get("type")
-    if payload_type == "message":
-        return message_blocks(payload, default_role=str(payload.get("role") or "unknown"))
-    if payload_type == "function_call":
+    if payload_type in {"message", "agent_message"}:
+        default_role = "tool" if payload_type == "agent_message" else "unknown"
+        return message_blocks(
+            payload,
+            default_role=str(payload.get("role") or default_role),
+        )
+    if payload_type in {"function_call", "custom_tool_call", "tool_search_call"}:
+        value = payload.get("arguments")
+        if value is None:
+            value = payload.get("input")
         item = block(
             "assistant",
             "tool_call",
-            payload.get("arguments"),
-            label=str(payload.get("name") or "tool"),
+            value,
+            label=str(
+                payload.get("name")
+                or ("tool search" if payload_type == "tool_search_call" else "tool")
+            ),
         )
         return (item,) if item else ()
-    if payload_type == "function_call_output":
+    if payload_type in {
+        "function_call_output",
+        "custom_tool_call_output",
+        "tool_search_output",
+    }:
+        value = payload.get("output")
+        if value is None:
+            value = payload.get("tools")
         item = block(
             "tool",
             "tool_result",
-            payload.get("output"),
+            value,
             label=str(payload.get("call_id") or "tool result"),
         )
         return (item,) if item else ()
@@ -116,6 +133,7 @@ def parse_codex(path: Path) -> Session:
     previous_total = (0, 0, 0, 0)
     context: list[ContentBlock] = []
     pending: list[ContentBlock] = []
+    response_observed = False
 
     for event in read_jsonl(path):
         event_type = event.get("type")
@@ -130,10 +148,17 @@ def parse_codex(path: Path) -> Session:
             continue
         if event_type == "response_item":
             pending.extend(item for item in _response_blocks(payload) if item not in pending)
+            response_observed = True
             continue
         if event_type != "event_msg":
             continue
         payload_type = payload.get("type")
+        if payload_type in {"agent_message", "user_message"}:
+            role = "assistant" if payload_type == "agent_message" else "user"
+            item = block(role, "message", payload.get("message"))
+            if item and item not in pending:
+                pending.append(item)
+            continue
         if payload_type == "task_started":
             if steps is not None:
                 turns.append(
@@ -154,12 +179,17 @@ def parse_codex(path: Path) -> Session:
             total = _counts(info.get("total_token_usage"))
             if total is None or total == previous_total:
                 continue
-            usage = _usage_from_delta(total, previous_total)
+            last = _counts(info.get("last_token_usage"))
+            usage = _usage_from_delta(last, (0, 0, 0, 0)) if last else None
             if usage is None:
-                last = _counts(info.get("last_token_usage"))
-                usage = _usage_from_delta(last, (0, 0, 0, 0)) if last else None
+                usage = _usage_from_delta(total, previous_total)
             previous_total = total
-            if steps is not None and usage is not None and usage.total:
+            if (
+                steps is not None
+                and usage is not None
+                and usage.total
+                and (pending or response_observed)
+            ):
                 input_blocks = unique(item for item in pending if _is_input(item))
                 output_blocks = unique(item for item in pending if not _is_input(item))
                 cached_preview, truncated = tail((*context, *input_blocks))
@@ -168,7 +198,7 @@ def parse_codex(path: Path) -> Session:
                         model=current_model,
                         usage=usage,
                         trace=PassTrace(
-                            input=input_blocks,
+                            input=input_blocks or cached_preview,
                             output=output_blocks,
                             cached_preview=cached_preview,
                             cached_preview_truncated=truncated,
@@ -177,6 +207,7 @@ def parse_codex(path: Path) -> Session:
                 )
                 context.extend(unique(pending))
                 pending.clear()
+                response_observed = False
             continue
         if payload_type in {"task_complete", "turn_aborted"} and steps is not None:
             turns.append(

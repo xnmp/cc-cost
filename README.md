@@ -23,7 +23,8 @@ type to filter by title, and press Enter to select.
 Select an input, output, cache-read, or cache-write segment to see its exact
 provider-reported token count and the readable transcript blocks associated with
 each contributing pass. Messages, reasoning summaries, tool calls, and tool
-results are formatted separately.
+results are formatted separately. Tool records start collapsed, and parsed JSON
+objects and arrays can be expanded independently at each nesting level.
 
 Provider transcripts do not contain token IDs, the complete provider-assembled
 prompt, or exact cache boundaries. Cached segments therefore show a bounded

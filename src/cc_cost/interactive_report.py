@@ -131,7 +131,15 @@ svg .sep { fill: var(--panel) }
 .tracehead { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px;
   background: var(--hover); color: var(--muted); font-size: 11px }
 .trace.user .tracehead, .trace.assistant .tracehead { padding: 8px 12px }
-.trace.tool .tracehead { background: transparent; padding: 5px 9px }
+.trace.tool > .tracehead { background: transparent; padding: 7px 9px; cursor: pointer;
+  list-style: none; user-select: none }
+.trace.tool > .tracehead::-webkit-details-marker { display: none }
+.trace.tool > .tracehead::after { content: "›"; margin-left: auto; color: var(--muted);
+  font-size: 16px; line-height: 1; transform: rotate(0); transition: transform .14s ease-out }
+.trace.tool[open] > .tracehead::after { transform: rotate(90deg) }
+.trace.tool > .tracehead:hover { background: var(--hover) }
+.trace.tool > .tracehead:focus-visible, .jsonnode > summary:focus-visible {
+  outline: 2px solid var(--selection-bg); outline-offset: -2px }
 .tracehead b { color: var(--axis2); font-weight: 650 }
 .trace pre { margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap;
   overflow-wrap: anywhere; color: var(--text);
@@ -139,6 +147,24 @@ svg .sep { fill: var(--panel) }
 .trace.message pre { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px;
   line-height: 1.6; padding: 14px 16px 16px }
 .trace.tool pre { color: var(--axis2); font-size: 11px; line-height: 1.55; padding: 10px }
+.toolbody { border-top: 1px solid var(--border) }
+.jsontree { padding: 8px 10px 10px; color: var(--axis2);
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
+.jsonnode { margin: 1px 0 }
+.jsonnode > summary { display: flex; align-items: baseline; gap: 7px; min-height: 22px;
+  cursor: pointer; list-style: none; border-radius: 4px; padding: 1px 4px }
+.jsonnode > summary::-webkit-details-marker { display: none }
+.jsonnode > summary:hover { background: var(--hover) }
+.jsonnode > summary::before { content: "›"; color: var(--muted); width: 8px;
+  transform: rotate(0); transition: transform .12s ease-out }
+.jsonnode[open] > summary::before { transform: rotate(90deg) }
+.jcount { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px }
+.jchildren { margin-left: 12px; padding-left: 11px; border-left: 1px solid var(--border) }
+.jrow { display: grid; grid-template-columns: minmax(70px, max-content) minmax(0, 1fr);
+  gap: 8px; align-items: start; min-height: 22px; padding: 1px 4px }
+.jrow > .jsonnode { min-width: 0 }
+.jv { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap }
 .jk { color: var(--cache-read) }
 .js { color: var(--text) }
 .jn { color: var(--axis2) }
@@ -245,22 +271,39 @@ function render(){
 function redraw(node){drawChart(node);buildMini(node);}
 function crow(c,l,amt,total){return '<div class="row"><span class="sw" style="background:'+c+'"></span><span class="lb">'+esc(l)+"</span><b>"+fmt(amt)+'</b><span class="pct">'+(total?(amt/total*100).toFixed(1):"0.0")+"%</span></div>";}
 function inspectField(comp){return comp==="output"?"output":comp==="input"?"input":"cached";}
-function jsonMarkup(text){
-  var value;try{value=JSON.parse(text);}catch(e){return null;}
-  var pretty=JSON.stringify(value,null,2);
-  return pretty.replace(/("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,function(token){
-    var cls=/^"/.test(token)?(/:\s*$/.test(token)?"jk":"js"):/^(true|false|null)$/.test(token)?"jl":"jn";
-    return '<span class="'+cls+'">'+esc(token)+'</span>';
-  });
+function jsonPrimitive(value){
+  if(value===null)return '<span class="jl">null</span>';
+  if(typeof value==="string")return '<span class="js">'+esc(JSON.stringify(value))+"</span>";
+  if(typeof value==="number")return '<span class="jn">'+esc(String(value))+"</span>";
+  return '<span class="jl">'+esc(String(value))+"</span>";
+}
+function jsonTree(value,depth){
+  if(value===null||typeof value!=="object")return '<span class="jv">'+jsonPrimitive(value)+"</span>";
+  if(depth>=12)return '<span class="jv">'+esc(JSON.stringify(value))+"</span>";
+  var array=Array.isArray(value),keys=array?value.map(function(_,i){return i;}):Object.keys(value);
+  var open=depth===0?" open":"",left=array?"[":"{",right=array?"]":"}";
+  var count=keys.length+" "+(array?(keys.length===1?"item":"items"):(keys.length===1?"key":"keys"));
+  var rows=keys.map(function(key){var label=array?'<span class="jk">'+key+"</span>":'<span class="jk">'+esc(JSON.stringify(key))+"</span>";
+    return '<div class="jrow">'+label+jsonTree(value[key],depth+1)+"</div>";
+  }).join("");
+  return '<details class="jsonnode"'+open+'><summary><span>'+left+" "+right+'</span><span class="jcount">'+count+"</span></summary><div class=\"jchildren\">"+rows+"</div></details>";
+}
+function parsedJson(text){
+  try{return JSON.parse(text);}catch(e){return undefined;}
 }
 function traceClass(block){
   if(block.kind==="message")return "message "+(block.role==="user"?"user":block.role==="assistant"?"assistant":"other");
   if(block.kind==="tool_call"||block.kind==="tool_result")return "tool";
   return "other";
 }
-function traceBody(block){
-  var json=(block.kind==="tool_call"||block.kind==="tool_result")?jsonMarkup(block.text):null;
-  return json===null?esc(block.text):json;
+function toolBody(block){
+  var value=parsedJson(block.text);
+  return '<div class="toolbody">'+(value===undefined?"<pre>"+esc(block.text)+"</pre>":'<div class="jsontree">'+jsonTree(value,0)+"</div>")+"</div>";
+}
+function traceMarkup(block){
+  var label=block.label||block.kind.replace("_"," "),head='<div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(block.role)+"</span></div>";
+  if(block.kind==="tool_call"||block.kind==="tool_result")return '<details class="trace tool"><summary class="tracehead"><b>'+esc(label)+'</b><span>'+esc(block.role)+"</span></summary>"+toolBody(block)+"</details>";
+  return '<article class="trace '+traceClass(block)+'">'+head+"<pre>"+esc(block.text)+"</pre></article>";
 }
 function openInspect(barIndex,comp){
   var bar=cur().bars[barIndex],ids=bar.pass_ids||[],field=inspectField(comp),tokens=0;
@@ -268,8 +311,7 @@ function openInspect(barIndex,comp){
   var sections=ids.map(function(id,n){var p=PASSES[id];if(!p)return "";tokens+=p.usage[comp]||0;
     var blocks=p[field]||[],head='<div class="passhead">pass '+(n+1)+' · '+esc(p.model)+'</div>';
     if(!blocks.length)return '<section class="passgroup">'+head+'<div class="iempty">No readable content was recorded for this pass.</div></section>';
-    return '<section class="passgroup">'+head+blocks.map(function(b){var label=b.label||b.kind.replace("_"," ");
-      return '<article class="trace '+traceClass(b)+'"><div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(b.role)+'</span></div><pre>'+traceBody(b)+'</pre></article>';}).join("")+"</section>";
+    return '<section class="passgroup">'+head+blocks.map(traceMarkup).join("")+"</section>";
   }).join("");
   var cached=field==="cached",truncated=ids.some(function(id){return PASSES[id]&&PASSES[id].cached_truncated;});
   document.getElementById("ititle").textContent=labels[comp]+" content";

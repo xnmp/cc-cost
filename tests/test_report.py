@@ -43,6 +43,12 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
                                     "message",
                                     "Here is the explanation",
                                 ),
+                                ContentBlock(
+                                    "assistant",
+                                    "tool_call",
+                                    '{\n  "outer": {\n    "inner": 1\n  }\n}',
+                                    label="inspect_json",
+                                ),
                             ),
                         ),
                     ),
@@ -80,7 +86,10 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert "width: min(1180px" in document
     assert ".trace.user" in document
     assert ".trace.assistant" in document
-    assert "function jsonMarkup" in document
+    assert "function jsonTree" in document
+    assert "function traceMarkup" in document
+    assert '<details class="trace tool">' in document
+    assert "inspect_json" in document
 
 
 def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path) -> None:

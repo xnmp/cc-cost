@@ -101,6 +101,7 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert "function traceMarkup" in document
     assert "function inspectionBlocks" in document
     assert "function toolExchangeMarkup" in document
+    assert "function systemPromptMarkup" in document
     assert '<details class="trace tool">' in document
     assert "inspect_json" in document
     assert '"call_id": "call-1"' in document
@@ -226,13 +227,33 @@ const huge=renderer.patchContent(
   "*** Begin Patch\\n*** Add File: huge.txt\\n+"+
   "x".repeat(100000)+"\\n*** End Patch"
 );
+const grouped=renderer.traceList([
+  {{
+    role:"developer",kind:"message",text:"first <unsafe>",
+    label:"",call_id:"",html:"",prompt_context:true
+  }},
+  {{
+    role:"user",kind:"message",text:"# AGENTS.md instructions",
+    label:"",call_id:"",html:"",prompt_context:true
+  }},
+  {{role:"user",kind:"message",text:"question",label:"",call_id:"",html:"",prompt_context:false}},
+  {{role:"developer",kind:"message",text:"later",label:"",call_id:"",html:"",prompt_context:true}}
+]);
+const ordinary=renderer.traceList([
+  {{role:"user",kind:"message",text:"question",label:"",call_id:"",html:"",prompt_context:false}}
+]);
 console.log(JSON.stringify({{
   files:(html.match(/class="pline file"/g)||[]).length,
   additions:(html.match(/class="pline add"/g)||[]).length,
   deletions:(html.match(/class="pline delete"/g)||[]).length,
   escaped:html.includes("&lt;value&gt;"),
   malformed:malformed.includes("<b>0 files</b>"),
-  huge:huge.length>100000&&huge.includes("<b>1 file</b>")
+  huge:huge.length>100000&&huge.includes("<b>1 file</b>"),
+  systemGroups:(grouped.match(/class="trace systemprompt"/g)||[]).length,
+  systemSections:(grouped.match(/class="systemsection"/g)||[]).length,
+  systemEscaped:grouped.includes("first &lt;unsafe&gt;"),
+  laterDeveloper:(grouped.match(/<article class="trace message other">/g)||[]).length,
+  ordinaryUngrouped:!ordinary.includes("System prompt")
 }}));
 """
 
@@ -251,4 +272,9 @@ console.log(JSON.stringify({{
         "escaped": True,
         "malformed": True,
         "huge": True,
+        "systemGroups": 1,
+        "systemSections": 2,
+        "systemEscaped": True,
+        "laterDeveloper": 1,
+        "ordinaryUngrouped": True,
     }

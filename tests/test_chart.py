@@ -85,6 +85,7 @@ def test_chart_preserves_turn_pass_and_subagent_drilldown_contract() -> None:
         "label": "read_file",
         "call_id": "call-1",
         "html": "",
+        "prompt_context": False,
     }
     assert len(nodes["root"]["bars"]) == 1
     assert len(nodes["root_steps"]["bars"]) == 2

@@ -7,6 +7,18 @@ from typing import Any
 from cc_cost.domain import ContentBlock, ContentKind
 
 CACHE_PREVIEW_CHARS = 8_000
+INJECTED_CONTEXT_PREFIXES = (
+    "<local-command",
+    "<command-",
+    "<recommended_plugins>",
+    "# AGENTS.md instructions",
+    "<environment_context>",
+    "<permissions instructions>",
+    "<collaboration_mode>",
+    "<apps_instructions>",
+    "<plugins_instructions>",
+    "<skills_instructions>",
+)
 
 
 def pretty(value: object) -> str:
@@ -45,6 +57,14 @@ def unique(blocks: Iterable[ContentBlock]) -> tuple[ContentBlock, ...]:
             seen.add(item)
             result.append(item)
     return tuple(result)
+
+
+def is_prompt_context(block: ContentBlock) -> bool:
+    if block.role in {"developer", "system"} or block.kind == "system":
+        return True
+    return block.role == "user" and block.text.lstrip().startswith(
+        INJECTED_CONTEXT_PREFIXES
+    )
 
 
 def tail(

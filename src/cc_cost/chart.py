@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from cc_cost.analysis import CostAnalyzer, SessionAnalysis
+from cc_cost.content import is_prompt_context
 from cc_cost.domain import ContentBlock, Cost, Session, Step
 from cc_cost.markup import render_assistant_markdown
 from cc_cost.pricing import PricingCatalog
@@ -63,7 +64,7 @@ def build_chart(
     }
     pass_details: dict[str, dict[str, Any]] = {}
 
-    def content(item: ContentBlock) -> dict[str, str]:
+    def content(item: ContentBlock) -> dict[str, Any]:
         return {
             "role": item.role,
             "kind": item.kind,
@@ -75,6 +76,7 @@ def build_chart(
                 if item.role == "assistant" and item.kind == "message"
                 else ""
             ),
+            "prompt_context": is_prompt_context(item),
         }
 
     def pass_id(session: Session, index: int) -> str:

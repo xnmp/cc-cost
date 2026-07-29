@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from cc_cost.content import INJECTED_CONTEXT_PREFIXES
 from cc_cost.domain import Provider, Session
 from cc_cost.jsonl import read_json, read_jsonl
 from cc_cost.picker import SessionSummary, pick_session
@@ -73,21 +74,9 @@ def _message_text(content: object) -> str | None:
         ]
     else:
         return None
-    ignored_prefixes = (
-        "<local-command",
-        "<command-",
-        "<recommended_plugins>",
-        "# AGENTS.md instructions",
-        "<environment_context>",
-        "<permissions instructions>",
-        "<collaboration_mode>",
-        "<apps_instructions>",
-        "<plugins_instructions>",
-        "<skills_instructions>",
-    )
     for value in values:
         normalized = " ".join(value.split())
-        if normalized and not normalized.startswith(ignored_prefixes):
+        if normalized and not normalized.startswith(INJECTED_CONTEXT_PREFIXES):
             return normalized
     return None
 

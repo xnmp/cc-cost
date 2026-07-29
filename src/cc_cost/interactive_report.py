@@ -126,20 +126,28 @@ svg .sep { fill: var(--panel) }
 .trace.assistant { margin-right: auto;
   background: color-mix(in srgb, var(--cache-read) 10%, var(--panel));
   border-color: color-mix(in srgb, var(--cache-read) 30%, var(--border)) }
+.trace.systemprompt { width: 100%; max-width: none; border-color: var(--border);
+  border-radius: 10px; background: color-mix(in srgb, __BG__ 76%, transparent) }
 .trace.tool { width: 100%; max-width: none; border-color: var(--border);
   border-radius: 10px; background: color-mix(in srgb, __BG__ 70%, transparent) }
 .trace.other { margin-right: auto; background: var(--hover) }
 .tracehead { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px;
   background: var(--hover); color: var(--muted); font-size: 11px }
 .trace.user .tracehead, .trace.assistant .tracehead { padding: 8px 12px }
-.trace.tool > .tracehead { background: transparent; padding: 9px 11px; cursor: pointer;
+.trace.tool > .tracehead, .trace.systemprompt > .tracehead {
+  background: transparent; padding: 9px 11px; cursor: pointer;
   list-style: none; user-select: none; align-items: center }
-.trace.tool > .tracehead::-webkit-details-marker { display: none }
-.trace.tool > .tracehead::after { content: "›"; margin-left: auto; color: var(--muted);
+.trace.tool > .tracehead::-webkit-details-marker,
+.trace.systemprompt > .tracehead::-webkit-details-marker { display: none }
+.trace.tool > .tracehead::after, .trace.systemprompt > .tracehead::after {
+  content: "›"; margin-left: auto; color: var(--muted);
   font-size: 16px; line-height: 1; transform: rotate(0); transition: transform .14s ease-out }
-.trace.tool[open] > .tracehead::after { transform: rotate(90deg) }
-.trace.tool > .tracehead:hover { background: var(--hover) }
-.trace.tool > .tracehead:focus-visible, .jsonnode > summary:focus-visible {
+.trace.tool[open] > .tracehead::after,
+.trace.systemprompt[open] > .tracehead::after { transform: rotate(90deg) }
+.trace.tool > .tracehead:hover, .trace.systemprompt > .tracehead:hover {
+  background: var(--hover) }
+.trace.tool > .tracehead:focus-visible, .trace.systemprompt > .tracehead:focus-visible,
+.jsonnode > summary:focus-visible {
   outline: 2px solid var(--selection-bg); outline-offset: -2px }
 .tracehead b { color: var(--axis2); font-weight: 650 }
 .tooltag { flex: none; color: var(--muted); border: 1px solid var(--border2);
@@ -147,6 +155,12 @@ svg .sep { fill: var(--panel) }
   letter-spacing: .04em; text-transform: uppercase }
 .toolname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .toolmeta { color: var(--muted); font-size: 10px }
+.systembody { border-top: 1px solid var(--border) }
+.systemsection + .systemsection { border-top: 1px solid var(--border) }
+.systemrole { padding: 6px 11px 0; color: var(--muted); font-size: 9px;
+  font-weight: 700; letter-spacing: .05em; text-transform: uppercase }
+.trace.systemprompt pre { padding: 7px 11px 11px; color: var(--axis2);
+  font-size: 11px; line-height: 1.55 }
 .trace pre { margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap;
   overflow-wrap: anywhere; color: var(--text);
   font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
@@ -419,6 +433,22 @@ function traceMarkup(block){
     : "<pre>"+esc(block.text)+"</pre>";
   return '<article class="trace '+traceClass(block)+'">'+head+body+"</article>";
 }
+function isSystemBlock(block){
+  return block&&(
+    block.prompt_context||
+    block.role==="system"||
+    block.role==="developer"||
+    block.kind==="system"
+  );
+}
+function systemPromptMarkup(blocks){
+  var chars=blocks.reduce(function(total,block){return total+block.text.length;},0);
+  var meta=blocks.length+" section"+(blocks.length===1?"":"s")+" · "+chars.toLocaleString()+" characters";
+  var body=blocks.map(function(block){
+    return '<section class="systemsection"><div class="systemrole">'+esc(block.role||"system")+"</div><pre>"+esc(block.text)+"</pre></section>";
+  }).join("");
+  return '<details class="trace systemprompt"><summary class="tracehead"><span class="tooltag">context</span><b class="toolname">System prompt</b><span class="toolmeta">'+meta+'</span></summary><div class="systembody">'+body+"</div></details>";
+}
 function inspectionBlocks(pass,field){
   var blocks=(pass[field]||[]).slice();
   if(field!=="input")return blocks;
@@ -436,6 +466,9 @@ function inspectionBlocks(pass,field){
 }
 function traceList(blocks){
   var used={},html=[];
+  var leading=0;
+  while(leading<blocks.length&&isSystemBlock(blocks[leading]))leading++;
+  if(leading){html.push(systemPromptMarkup(blocks.slice(0,leading)));for(var j=0;j<leading;j++)used[j]=true;}
   blocks.forEach(function(block,index){
     if(used[index])return;
     if(block.kind==="tool_call"&&block.call_id){
@@ -541,7 +574,12 @@ function setMode(){if(document.getElementById("norm").disabled)return;mode=docum
 function toggleSubs(){showSubs=document.getElementById("subs").checked;render();}
 function resetZoom(){var node=cur();win={s:0,e:Math.max(0,node.bars.length-1)};redraw(node);}
 if(typeof module!=="undefined"&&module.exports){
-  module.exports={patchLineKind:patchLineKind,patchContent:patchContent};
+  module.exports={
+    patchLineKind:patchLineKind,
+    patchContent:patchContent,
+    isSystemBlock:isSystemBlock,
+    traceList:traceList
+  };
 }else{(function(){
   document.getElementById("themeName").textContent=THEME.name;document.getElementById("themeSource").textContent=THEME.source;
   var chart=document.getElementById("chart");chart.addEventListener("mousemove",showTip);chart.addEventListener("mouseleave",function(){tipEl().style.display="none";});

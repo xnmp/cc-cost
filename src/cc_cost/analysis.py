@@ -82,7 +82,7 @@ class CostAnalyzer:
         self._steps_cache[session_id] = count
         return count
 
-    def _children_by_turn(self, session: Session) -> dict[int, tuple[str, ...]]:
+    def children_by_turn(self, session: Session) -> dict[int, tuple[str, ...]]:
         direct = self.graph.children.get(session.id, ())
         allocated: dict[int, list[str]] = {turn.number: [] for turn in session.turns}
         if not session.turns:
@@ -117,7 +117,7 @@ class CostAnalyzer:
 
     def analyze(self) -> SessionAnalysis:
         root = self.graph.root
-        children_by_turn = self._children_by_turn(root)
+        children_by_turn = self.children_by_turn(root)
         turn_analyses: list[TurnAnalysis] = []
         for turn in root.turns:
             own = sum(

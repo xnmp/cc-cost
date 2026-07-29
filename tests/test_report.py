@@ -1,10 +1,13 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from cc_cost.analysis import CostAnalyzer
 from cc_cost.domain import Session, Step, TokenUsage, Turn
+from cc_cost.interactive_report import render_interactive_html
 from cc_cost.report import render_html, terminal_report
 from cc_cost.repository import SessionGraph
+from cc_cost.theme import TerminalTheme
 
 
 def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
@@ -33,5 +36,35 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert "provider   : codex" in text
     assert "total cost : $5.00" in text
     assert "Session cost by turn" in document
-    assert "$5.00" in document
-    assert "&lt;session&gt;" in document
+    assert '"total": 5.0' in document
+    assert 'id="perstep"' in document
+    assert 'id="norm"' in document
+    assert 'id="subs"' in document
+    assert "buildMini" in document
+    assert "openAgent" in document
+
+
+def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path) -> None:
+    session = Session(
+        id="root",
+        provider="codex",
+        path=Path("/transcript.jsonl"),
+        cwd=Path("/work"),
+        started_at=None,
+        label="</script><script>alert(1)</script>",
+        turns=(Turn(1, (Step("gpt-5.6-sol", TokenUsage(input=1)),)),),
+    )
+    analysis = CostAnalyzer(
+        SessionGraph(root=session, sessions={"root": session}, children={})
+    ).analyze()
+    output = tmp_path / "report.html"
+    theme = replace(
+        TerminalTheme.system(),
+        name="</script><script>alert(1)</script>",
+    )
+
+    render_interactive_html(analysis, output, theme=theme)
+    document = output.read_text(encoding="utf-8")
+
+    assert document.count("</script>") == 1
+    assert "\\u003c/script\\u003e" in document

@@ -1,8 +1,17 @@
 # cc-cost
 
 `cc-cost` reads Claude Code and Codex JSONL transcripts, computes token costs,
-prints a per-turn terminal summary, and writes a self-contained HTML chart. It
-does not call a model or upload transcript content.
+prints a per-turn terminal summary, and writes a self-contained interactive HTML
+chart. It does not call a model or upload transcript content.
+
+Claude and Codex use the same report UI:
+
+- per-turn and per-step views
+- normalized or raw cost bars
+- component and subagent segments
+- nested subagent drill-down with breadcrumbs
+- minimap selection, cursor-centered zoom, and keyboard reset
+- terminal-theme colors read from Ghostty or WezTerm
 
 ## Why it has a domain model
 
@@ -55,6 +64,21 @@ cc-cost -o ./session-cost.html transcript.jsonl
 
 Set `CC_COST_OPEN=0` to disable browser opening by default.
 
+## Terminal theme
+
+At report generation time, `cc-cost` reads the active terminal palette:
+
+1. If `TERM_PROGRAM` identifies WezTerm, read its active custom
+   `config.color_scheme`; otherwise prefer Ghostty.
+2. For Ghostty, read `~/.config/ghostty/config`, load its active `theme` file,
+   and apply config-level color and palette overrides.
+3. If the preferred terminal cannot be parsed, try the other terminal.
+4. If neither exposes a complete palette, use browser system colors.
+
+The palette drives page surfaces, text, selection, chart components, model
+segments, focus outlines, and tooltips. The generated report records the theme
+name and source path in its footer.
+
 ## Cost semantics
 
 Claude prices preserve the original script's model-family rates. Codex prices
@@ -84,5 +108,8 @@ cumulative snapshots are deduplicated.
 - `providers/`: Claude and Codex transcript adapters
 - `repository.py`: discovery and subagent graph reconstruction
 - `analysis.py`: pure session/tree cost aggregation
-- `report.py`: terminal and HTML presenters
+- `chart.py`: provider-neutral interactive chart contract
+- `theme.py`: Ghostty and WezTerm palette adapters
+- `interactive_report.py`: shared accessible HTML/SVG presenter
+- `report.py`: terminal presenter and HTML entry point
 - `cli.py`: command-line infrastructure

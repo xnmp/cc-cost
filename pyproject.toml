@@ -1,6 +1,6 @@
 [project]
 name = "cc-cost"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cost reports for Claude Code and Codex sessions"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,6 +32,8 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/cc_cost/interactive_report.py" = ["E501"]
+
 [tool.pyrefly]
 project-includes = ["src/**/*.py", "tests/**/*.py"]
-

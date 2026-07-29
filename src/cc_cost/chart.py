@@ -6,6 +6,7 @@ from typing import Any
 
 from cc_cost.analysis import CostAnalyzer, SessionAnalysis
 from cc_cost.domain import ContentBlock, Cost, Session, Step
+from cc_cost.markup import render_assistant_markdown
 from cc_cost.pricing import PricingCatalog
 
 
@@ -69,6 +70,11 @@ def build_chart(
             "text": item.text,
             "label": item.label,
             "call_id": item.call_id,
+            "html": (
+                render_assistant_markdown(item.text)
+                if item.role == "assistant" and item.kind == "message"
+                else ""
+            ),
         }
 
     def pass_id(session: Session, index: int) -> str:

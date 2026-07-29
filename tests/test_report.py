@@ -89,12 +89,14 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert "normalize by passes" in document
     assert 'input:"uncached input"' in document
     assert "Explain the selected tokens" in document
+    assert "\\u003cp\\u003eHere is the explanation\\u003c/p\\u003e" in document
     assert "Readable transcript content associated" in document
     assert 'id="inspect"' in document
     assert 'data-comp="' in document
     assert "width: min(1180px" in document
     assert ".trace.user" in document
     assert ".trace.assistant" in document
+    assert ".markdown blockquote" in document
     assert "function jsonTree" in document
     assert "function traceMarkup" in document
     assert "function inspectionBlocks" in document

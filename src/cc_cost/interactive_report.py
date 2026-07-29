@@ -152,6 +152,38 @@ svg .sep { fill: var(--panel) }
   font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
 .trace.message pre { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px;
   line-height: 1.6; padding: 14px 16px 16px }
+.markdown { padding: 12px 16px 15px; color: var(--text); font-size: 14px;
+  line-height: 1.62; overflow-wrap: anywhere }
+.markdown > :first-child { margin-top: 0 }
+.markdown > :last-child { margin-bottom: 0 }
+.markdown p { margin: .65em 0 }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 {
+  color: var(--text); line-height: 1.28; letter-spacing: -.012em;
+  margin: 1.25em 0 .45em; font-weight: 680 }
+.markdown h1 { font-size: 18px }
+.markdown h2 { font-size: 16px }
+.markdown h3, .markdown h4 { font-size: 14px }
+.markdown ul, .markdown ol { margin: .65em 0; padding-left: 1.5em }
+.markdown li { margin: .22em 0 }
+.markdown li > p { margin: .3em 0 }
+.markdown blockquote { margin: .8em 0; padding: 1px 0 1px 12px;
+  border-left: 1px solid var(--cache-read); color: var(--axis2) }
+.markdown code { border-radius: 4px; padding: .1em .32em;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  font: .88em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace }
+.markdown pre { margin: .8em 0; padding: 11px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: color-mix(in srgb, __BG__ 76%, transparent);
+  overflow: auto; white-space: pre; overflow-wrap: normal }
+.markdown pre code { padding: 0; background: transparent; font-size: 12px }
+.markdown a { color: var(--cache-read); text-underline-offset: 2px }
+.markdown a:hover { color: var(--text) }
+.markdown hr { height: 1px; margin: 1.1em 0; border: 0; background: var(--border) }
+.markdown table { width: 100%; margin: .8em 0; border-collapse: collapse;
+  font-size: 12px; line-height: 1.5 }
+.markdown th, .markdown td { padding: 6px 9px; border: 1px solid var(--border);
+  text-align: left; vertical-align: top }
+.markdown th { color: var(--axis2); background: var(--hover); font-weight: 650 }
+.markdown s { color: var(--muted) }
 .trace.tool pre { color: var(--axis2); font-size: 11px; line-height: 1.55; padding: 10px }
 .toolbody { border-top: 1px solid var(--border) }
 .toolparts { border-top: 1px solid var(--border) }
@@ -382,7 +414,10 @@ function traceMarkup(block){
   var label=block.label||block.kind.replace("_"," "),head='<div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(block.role)+"</span></div>";
   if(block.kind==="tool_call")return toolExchangeMarkup(block,null);
   if(block.kind==="tool_result")return toolExchangeMarkup(null,block);
-  return '<article class="trace '+traceClass(block)+'">'+head+"<pre>"+esc(block.text)+"</pre></article>";
+  var body=block.kind==="message"&&block.role==="assistant"&&block.html
+    ? '<div class="markdown">'+block.html+"</div>"
+    : "<pre>"+esc(block.text)+"</pre>";
+  return '<article class="trace '+traceClass(block)+'">'+head+body+"</article>";
 }
 function inspectionBlocks(pass,field){
   var blocks=(pass[field]||[]).slice();

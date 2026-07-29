@@ -77,6 +77,10 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert "Readable transcript content associated" in document
     assert 'id="inspect"' in document
     assert 'data-comp="' in document
+    assert "width: min(1180px" in document
+    assert ".trace.user" in document
+    assert ".trace.assistant" in document
+    assert "function jsonMarkup" in document
 
 
 def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path) -> None:

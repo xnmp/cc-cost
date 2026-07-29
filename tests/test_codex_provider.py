@@ -66,6 +66,14 @@ def test_codex_uses_cumulative_deltas_and_deduplicates_snapshots(tmp_path: Path)
                 "content": [{"type": "output_text", "text": "First response"}],
             },
         },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "function_call",
+                "name": "read_file",
+                "arguments": '{"path":"/tmp/example.py","line":12}',
+            },
+        },
         _token((100, 40, 10, 5), (100, 40, 10, 5)),
         _token((100, 40, 10, 5), (100, 40, 10, 5)),
         _token((180, 60, 10, 12), (80, 20, 0, 7)),
@@ -89,6 +97,10 @@ def test_codex_uses_cumulative_deltas_and_deduplicates_snapshots(tmp_path: Path)
     assert session.steps[1].usage.output == 7
     assert session.steps[0].trace.input[0].text == "inspect this pass"
     assert session.steps[0].trace.output[0].text == "First response"
+    assert session.steps[0].trace.output[1].label == "read_file"
+    assert session.steps[0].trace.output[1].text == (
+        '{\n  "path": "/tmp/example.py",\n  "line": 12\n}'
+    )
 
 
 def test_codex_attributes_active_model_per_turn_and_keeps_live_turn(tmp_path: Path) -> None:

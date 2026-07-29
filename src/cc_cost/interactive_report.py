@@ -96,29 +96,53 @@ svg .sep { fill: var(--panel) }
   border: 1px solid var(--tipbd); color: var(--tiptext); font-size: 12px;
   padding: 5px 9px; border-radius: 7px; display: none; z-index: 20;
   max-width: 340px; box-shadow: 0 6px 20px color-mix(in srgb, __BG__ 70%, transparent) }
-.inspect { width: min(820px, calc(100vw - 24px)); max-height: min(82vh, 900px);
-  padding: 0; color: var(--text); background: var(--panel); border: 1px solid var(--border2);
-  border-radius: 14px; box-shadow: 0 18px 60px color-mix(in srgb, __BG__ 55%, transparent) }
+.inspect { width: min(1180px, calc(100vw - 32px)); height: min(92vh, 1000px);
+  max-width: none; max-height: none; padding: 0; color: var(--text); background: var(--panel);
+  border: 1px solid var(--border2); border-radius: 14px;
+  box-shadow: 0 18px 60px color-mix(in srgb, __BG__ 55%, transparent) }
+.inspect[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) }
 .inspect::backdrop { background: color-mix(in srgb, __BG__ 72%, transparent) }
-.ih { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between;
-  gap: 16px; align-items: flex-start; padding: 16px 18px; background: var(--panel);
+.ih { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start;
+  padding: 18px 22px; background: var(--panel);
   border-bottom: 1px solid var(--border) }
-.ih h2 { margin: 0; font-size: 17px; letter-spacing: -.01em }
+.ih h2 { margin: 0; font-size: 19px; letter-spacing: -.015em }
 .imeta { color: var(--muted); font-size: 12px; margin-top: 4px }
 .iclose { border: 1px solid var(--border2); background: var(--border); color: var(--text);
-  border-radius: 8px; padding: 5px 10px; cursor: pointer }
+  border-radius: 8px; min-width: 64px; padding: 7px 12px; cursor: pointer }
+.iclose:hover { background: var(--hover) }
 .iclose:focus-visible { outline: 2px solid var(--selection-bg); outline-offset: 2px }
-.ibody { padding: 16px 18px 20px }
-.inote { color: var(--note); font-size: 12px; line-height: 1.55; margin: 0 0 14px }
+.ibody { min-height: 0; overflow: auto; padding: 20px 24px 32px; scrollbar-gutter: stable }
+.inote { max-width: 78ch; color: var(--note); font-size: 12px; line-height: 1.6;
+  margin: 0 0 20px }
+.passgroup { max-width: 980px; margin: 0 auto 28px }
 .passhead { color: var(--axis2); font-size: 11px; font-weight: 650; text-transform: uppercase;
-  letter-spacing: .06em; margin: 18px 0 8px }
+  letter-spacing: .06em; margin: 24px 0 10px }
 .passhead:first-child { margin-top: 0 }
-.trace { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin: 0 0 8px }
+.trace { width: min(84%, 780px); border: 1px solid var(--border2); border-radius: 12px;
+  overflow: hidden; margin: 0 0 12px; background: var(--hover) }
+.trace.user { margin-left: auto; background: color-mix(in srgb, var(--selection-bg) 13%, var(--panel));
+  border-color: color-mix(in srgb, var(--selection-bg) 35%, var(--border)) }
+.trace.assistant { margin-right: auto;
+  background: color-mix(in srgb, var(--cache-read) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--cache-read) 30%, var(--border)) }
+.trace.tool { width: 100%; max-width: none; border-color: var(--border);
+  border-radius: 8px; background: color-mix(in srgb, __BG__ 70%, transparent) }
+.trace.other { margin-right: auto; background: var(--hover) }
 .tracehead { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px;
   background: var(--hover); color: var(--muted); font-size: 11px }
+.trace.user .tracehead, .trace.assistant .tracehead { padding: 8px 12px }
+.trace.tool .tracehead { background: transparent; padding: 5px 9px }
 .tracehead b { color: var(--axis2); font-weight: 650 }
-.trace pre { margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
-  color: var(--text); font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace }
+.trace pre { margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap;
+  overflow-wrap: anywhere; color: var(--text);
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
+.trace.message pre { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px;
+  line-height: 1.6; padding: 14px 16px 16px }
+.trace.tool pre { color: var(--axis2); font-size: 11px; line-height: 1.55; padding: 10px }
+.jk { color: var(--cache-read) }
+.js { color: var(--text) }
+.jn { color: var(--axis2) }
+.jl { color: var(--muted); font-weight: 650 }
 .iempty { color: var(--muted); padding: 20px 0; text-align: center }
 .note { color: var(--note); font-size: 12px; margin-top: 18px; line-height: 1.6 }
 @media (max-width: 640px) {
@@ -127,6 +151,11 @@ svg .sep { fill: var(--panel) }
   .head { align-items: flex-start }
   .big { text-align: left }
   .bar > div { gap: 10px !important }
+  .inspect { width: calc(100vw - 8px); height: 96vh; border-radius: 10px }
+  .ih { padding: 14px }
+  .ibody { padding: 16px 12px 24px }
+  .trace { width: calc(100% - 18px) }
+  .trace.tool { width: 100% }
 }
 """
 
@@ -216,14 +245,31 @@ function render(){
 function redraw(node){drawChart(node);buildMini(node);}
 function crow(c,l,amt,total){return '<div class="row"><span class="sw" style="background:'+c+'"></span><span class="lb">'+esc(l)+"</span><b>"+fmt(amt)+'</b><span class="pct">'+(total?(amt/total*100).toFixed(1):"0.0")+"%</span></div>";}
 function inspectField(comp){return comp==="output"?"output":comp==="input"?"input":"cached";}
+function jsonMarkup(text){
+  var value;try{value=JSON.parse(text);}catch(e){return null;}
+  var pretty=JSON.stringify(value,null,2);
+  return pretty.replace(/("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,function(token){
+    var cls=/^"/.test(token)?(/:\s*$/.test(token)?"jk":"js"):/^(true|false|null)$/.test(token)?"jl":"jn";
+    return '<span class="'+cls+'">'+esc(token)+'</span>';
+  });
+}
+function traceClass(block){
+  if(block.kind==="message")return "message "+(block.role==="user"?"user":block.role==="assistant"?"assistant":"other");
+  if(block.kind==="tool_call"||block.kind==="tool_result")return "tool";
+  return "other";
+}
+function traceBody(block){
+  var json=(block.kind==="tool_call"||block.kind==="tool_result")?jsonMarkup(block.text):null;
+  return json===null?esc(block.text):json;
+}
 function openInspect(barIndex,comp){
   var bar=cur().bars[barIndex],ids=bar.pass_ids||[],field=inspectField(comp),tokens=0;
   var labels={input:"uncached input",cache_read:"cache read",cache_write:"cache write",output:"output"};
   var sections=ids.map(function(id,n){var p=PASSES[id];if(!p)return "";tokens+=p.usage[comp]||0;
     var blocks=p[field]||[],head='<div class="passhead">pass '+(n+1)+' · '+esc(p.model)+'</div>';
-    if(!blocks.length)return head+'<div class="iempty">No readable content was recorded for this pass.</div>';
-    return head+blocks.map(function(b){var label=b.label||b.kind.replace("_"," ");
-      return '<section class="trace"><div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(b.role)+'</span></div><pre>'+esc(b.text)+'</pre></section>';}).join("");
+    if(!blocks.length)return '<section class="passgroup">'+head+'<div class="iempty">No readable content was recorded for this pass.</div></section>';
+    return '<section class="passgroup">'+head+blocks.map(function(b){var label=b.label||b.kind.replace("_"," ");
+      return '<article class="trace '+traceClass(b)+'"><div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(b.role)+'</span></div><pre>'+traceBody(b)+'</pre></article>';}).join("")+"</section>";
   }).join("");
   var cached=field==="cached",truncated=ids.some(function(id){return PASSES[id]&&PASSES[id].cached_truncated;});
   document.getElementById("ititle").textContent=labels[comp]+" content";

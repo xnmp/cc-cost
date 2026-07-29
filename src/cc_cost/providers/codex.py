@@ -89,6 +89,7 @@ def _response_blocks(payload: dict[str, Any]) -> tuple[ContentBlock, ...]:
                 payload.get("name")
                 or ("tool search" if payload_type == "tool_search_call" else "tool")
             ),
+            call_id=str(payload.get("call_id") or ""),
         )
         return (item,) if item else ()
     if payload_type in {
@@ -104,6 +105,7 @@ def _response_blocks(payload: dict[str, Any]) -> tuple[ContentBlock, ...]:
             "tool_result",
             value,
             label=str(payload.get("call_id") or "tool result"),
+            call_id=str(payload.get("call_id") or ""),
         )
         return (item,) if item else ()
     if payload_type == "reasoning":

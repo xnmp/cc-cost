@@ -25,11 +25,16 @@ def block(
     value: object,
     *,
     label: str = "",
+    call_id: str = "",
 ) -> ContentBlock | None:
     if value is None:
         return None
     text = pretty(value) if kind in {"tool_call", "tool_result"} else str(value)
-    return ContentBlock(role=role, kind=kind, text=text, label=label) if text else None
+    return (
+        ContentBlock(role=role, kind=kind, text=text, label=label, call_id=call_id)
+        if text
+        else None
+    )
 
 
 def unique(blocks: Iterable[ContentBlock]) -> tuple[ContentBlock, ...]:
@@ -64,6 +69,7 @@ def tail(
                 kind=item.kind,
                 text="… " + item.text[-remaining:],
                 label=item.label,
+                call_id=item.call_id,
             )
         )
         remaining = 0
@@ -97,6 +103,7 @@ def message_blocks(message: dict[str, Any], *, default_role: str) -> tuple[Conte
                 "tool_call",
                 raw.get("input"),
                 label=str(raw.get("name") or "tool"),
+                call_id=str(raw.get("id") or ""),
             )
         elif kind == "tool_result":
             item = block(
@@ -104,6 +111,7 @@ def message_blocks(message: dict[str, Any], *, default_role: str) -> tuple[Conte
                 "tool_result",
                 raw.get("content"),
                 label=str(raw.get("tool_use_id") or "tool result"),
+                call_id=str(raw.get("tool_use_id") or ""),
             )
         if item:
             result.append(item)

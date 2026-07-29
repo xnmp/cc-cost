@@ -126,13 +126,13 @@ svg .sep { fill: var(--panel) }
   background: color-mix(in srgb, var(--cache-read) 10%, var(--panel));
   border-color: color-mix(in srgb, var(--cache-read) 30%, var(--border)) }
 .trace.tool { width: 100%; max-width: none; border-color: var(--border);
-  border-radius: 8px; background: color-mix(in srgb, __BG__ 70%, transparent) }
+  border-radius: 10px; background: color-mix(in srgb, __BG__ 70%, transparent) }
 .trace.other { margin-right: auto; background: var(--hover) }
 .tracehead { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px;
   background: var(--hover); color: var(--muted); font-size: 11px }
 .trace.user .tracehead, .trace.assistant .tracehead { padding: 8px 12px }
-.trace.tool > .tracehead { background: transparent; padding: 7px 9px; cursor: pointer;
-  list-style: none; user-select: none }
+.trace.tool > .tracehead { background: transparent; padding: 9px 11px; cursor: pointer;
+  list-style: none; user-select: none; align-items: center }
 .trace.tool > .tracehead::-webkit-details-marker { display: none }
 .trace.tool > .tracehead::after { content: "›"; margin-left: auto; color: var(--muted);
   font-size: 16px; line-height: 1; transform: rotate(0); transition: transform .14s ease-out }
@@ -141,6 +141,11 @@ svg .sep { fill: var(--panel) }
 .trace.tool > .tracehead:focus-visible, .jsonnode > summary:focus-visible {
   outline: 2px solid var(--selection-bg); outline-offset: -2px }
 .tracehead b { color: var(--axis2); font-weight: 650 }
+.tooltag { flex: none; color: var(--muted); border: 1px solid var(--border2);
+  border-radius: 5px; padding: 1px 5px; font-size: 9px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase }
+.toolname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.toolmeta { color: var(--muted); font-size: 10px }
 .trace pre { margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap;
   overflow-wrap: anywhere; color: var(--text);
   font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
@@ -148,6 +153,19 @@ svg .sep { fill: var(--panel) }
   line-height: 1.6; padding: 14px 16px 16px }
 .trace.tool pre { color: var(--axis2); font-size: 11px; line-height: 1.55; padding: 10px }
 .toolbody { border-top: 1px solid var(--border) }
+.toolparts { border-top: 1px solid var(--border) }
+.toolpart + .toolpart { border-top: 1px solid var(--border) }
+.toolpart > summary { display: flex; align-items: center; gap: 7px; min-height: 32px;
+  padding: 5px 10px; cursor: pointer; list-style: none; color: var(--muted);
+  font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase }
+.toolpart > summary::-webkit-details-marker { display: none }
+.toolpart > summary::before { content: "›"; width: 8px; font-size: 14px;
+  transform: rotate(0); transition: transform .12s ease-out }
+.toolpart[open] > summary::before { transform: rotate(90deg) }
+.toolpart > summary:hover { background: var(--hover); color: var(--axis2) }
+.toolpart > summary:focus-visible { outline: 2px solid var(--selection-bg);
+  outline-offset: -2px }
+.toolpart > .jsontree, .toolpart > pre { border-top: 1px solid var(--border) }
 .jsontree { padding: 8px 10px 10px; color: var(--axis2);
   font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace }
 .jsonnode { margin: 1px 0 }
@@ -296,22 +314,65 @@ function traceClass(block){
   if(block.kind==="tool_call"||block.kind==="tool_result")return "tool";
   return "other";
 }
-function toolBody(block){
+function toolContent(block){
   var value=parsedJson(block.text);
-  return '<div class="toolbody">'+(value===undefined?"<pre>"+esc(block.text)+"</pre>":'<div class="jsontree">'+jsonTree(value,0)+"</div>")+"</div>";
+  return value===undefined?"<pre>"+esc(block.text)+"</pre>":'<div class="jsontree">'+jsonTree(value,0)+"</div>";
+}
+function toolName(block){
+  var label=block&&block.label||"";
+  return !label||label.indexOf("call_")===0||label==="tool"||label==="tool result"?"tool":label;
+}
+function toolPart(label,block,open){
+  if(!block)return "";
+  return '<details class="toolpart"'+(open?" open":"")+'><summary>'+esc(label)+"</summary>"+toolContent(block)+"</details>";
+}
+function toolExchangeMarkup(call,result){
+  var name=toolName(call||result),parts=(call?"arguments":"")+(call&&result?" · ":"")+(result?"result":"");
+  return '<details class="trace tool"><summary class="tracehead" aria-label="'+esc(name)+" tool exchange"+'"><span class="tooltag">tool</span><b class="toolname">'+esc(name)+'</b><span class="toolmeta">'+esc(parts)+"</span></summary><div class=\"toolparts\">"+toolPart("Arguments",call,true)+toolPart("Result",result,!call)+"</div></details>";
 }
 function traceMarkup(block){
   var label=block.label||block.kind.replace("_"," "),head='<div class="tracehead"><b>'+esc(label)+'</b><span>'+esc(block.role)+"</span></div>";
-  if(block.kind==="tool_call"||block.kind==="tool_result")return '<details class="trace tool"><summary class="tracehead"><b>'+esc(label)+'</b><span>'+esc(block.role)+"</span></summary>"+toolBody(block)+"</details>";
+  if(block.kind==="tool_call")return toolExchangeMarkup(block,null);
+  if(block.kind==="tool_result")return toolExchangeMarkup(null,block);
   return '<article class="trace '+traceClass(block)+'">'+head+"<pre>"+esc(block.text)+"</pre></article>";
+}
+function inspectionBlocks(pass,field){
+  var blocks=(pass[field]||[]).slice();
+  if(field!=="input")return blocks;
+  var calls={};
+  (pass.output||[]).forEach(function(block){
+    if(block.kind==="tool_call"&&block.call_id)calls[block.call_id]=block;
+  });
+  var result=[];
+  blocks.forEach(function(block){
+    var call=block.kind==="tool_result"&&block.call_id?calls[block.call_id]:null;
+    if(call&&!result.some(function(item){return item===call;}))result.push(call);
+    result.push(block);
+  });
+  return result;
+}
+function traceList(blocks){
+  var used={},html=[];
+  blocks.forEach(function(block,index){
+    if(used[index])return;
+    if(block.kind==="tool_call"&&block.call_id){
+      var match=-1;
+      for(var i=index+1;i<blocks.length;i++){
+        if(!used[i]&&blocks[i].kind==="tool_result"&&blocks[i].call_id===block.call_id){match=i;break;}
+      }
+      if(match>=0){used[match]=true;html.push(toolExchangeMarkup(block,blocks[match]));return;}
+    }
+    html.push(traceMarkup(block));
+  });
+  return html.join("");
 }
 function openInspect(barIndex,comp){
   var bar=cur().bars[barIndex],ids=bar.pass_ids||[],field=inspectField(comp),tokens=0;
   var labels={input:"uncached input",cache_read:"cache read",cache_write:"cache write",output:"output"};
   var sections=ids.map(function(id,n){var p=PASSES[id];if(!p)return "";tokens+=p.usage[comp]||0;
-    var blocks=p[field]||[],head='<div class="passhead">pass '+(n+1)+' · '+esc(p.model)+'</div>';
+    var blocks=inspectionBlocks(p,field),head='<div class="passhead">pass '+(n+1)+' · '+esc(p.model)+'</div>';
     if(!blocks.length)return '<section class="passgroup">'+head+'<div class="iempty">No readable content was recorded for this pass.</div></section>';
-    return '<section class="passgroup">'+head+blocks.map(traceMarkup).join("")+"</section>";
+    return '<section class="passgroup">'+head+traceList(blocks)+"</section>";
   }).join("");
   var cached=field==="cached",truncated=ids.some(function(id){return PASSES[id]&&PASSES[id].cached_truncated;});
   document.getElementById("ititle").textContent=labels[comp]+" content";

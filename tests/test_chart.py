@@ -3,7 +3,7 @@ from pathlib import Path
 
 from cc_cost.analysis import CostAnalyzer
 from cc_cost.chart import build_chart
-from cc_cost.domain import Session, Step, TokenUsage, Turn
+from cc_cost.domain import ContentBlock, PassTrace, Session, Step, TokenUsage, Turn
 from cc_cost.repository import SessionGraph
 
 
@@ -18,7 +18,30 @@ def test_chart_preserves_turn_pass_and_subagent_drilldown_contract() -> None:
             Turn(
                 1,
                 (
-                    Step("gpt-5.6-sol", TokenUsage(input=1_000_000)),
+                    Step(
+                        "gpt-5.6-sol",
+                        TokenUsage(input=1_000_000),
+                        trace=PassTrace(
+                            input=(
+                                ContentBlock(
+                                    "tool",
+                                    "tool_result",
+                                    "done",
+                                    label="call-1",
+                                    call_id="call-1",
+                                ),
+                            ),
+                            output=(
+                                ContentBlock(
+                                    "assistant",
+                                    "tool_call",
+                                    '{"path": "/tmp/file"}',
+                                    label="read_file",
+                                    call_id="call-1",
+                                ),
+                            ),
+                        ),
+                    ),
                     Step("gpt-5.6-sol", TokenUsage(output=1_000_000)),
                 ),
                 started_at=datetime(2026, 1, 1, tzinfo=UTC),
@@ -54,6 +77,14 @@ def test_chart_preserves_turn_pass_and_subagent_drilldown_contract() -> None:
     assert nodes["root_steps"]["kind"] == "pass"
     assert nodes["root"]["bars"][0]["pass_ids"] == ["root:0", "root:1"]
     assert passes["root:0"]["usage"]["input"] == 1_000_000
+    assert passes["root:0"]["input"][0]["call_id"] == "call-1"
+    assert passes["root:0"]["output"][0] == {
+        "role": "assistant",
+        "kind": "tool_call",
+        "text": '{"path": "/tmp/file"}',
+        "label": "read_file",
+        "call_id": "call-1",
+    }
     assert len(nodes["root"]["bars"]) == 1
     assert len(nodes["root_steps"]["bars"]) == 2
     assert nodes["root"]["bars"][0]["subs"][0]["id"] == "child"

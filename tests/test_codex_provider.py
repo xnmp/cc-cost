@@ -284,6 +284,7 @@ def test_codex_preserves_current_tool_and_agent_content_in_pass_traces(
         ("tool_call", "apply_patch"),
         ("tool_call", "tool search"),
     ]
+    assert [item.call_id for item in step.trace.output] == ["call-1", "call-2"]
     assert step.trace.output[0].text == "*** Begin Patch\nhuge edit\n*** End Patch"
     assert json.loads(step.trace.output[1].text) == {"query": "calendar tools"}
     assert [(item.kind, item.label) for item in step.trace.input] == [
@@ -291,6 +292,7 @@ def test_codex_preserves_current_tool_and_agent_content_in_pass_traces(
         ("tool_result", "call-2"),
         ("message", ""),
     ]
+    assert [item.call_id for item in step.trace.input] == ["call-1", "call-2", ""]
     assert step.trace.input[0].text == "Success. Updated one file."
     assert json.loads(step.trace.input[1].text) == [
         {"name": "search_events", "description": "Search events"}

@@ -46,6 +46,7 @@ class ContentBlock:
     kind: ContentKind
     text: str
     label: str = ""
+    call_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)

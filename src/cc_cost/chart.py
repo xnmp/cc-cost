@@ -68,6 +68,7 @@ def build_chart(
             "kind": item.kind,
             "text": item.text,
             "label": item.label,
+            "call_id": item.call_id,
         }
 
     def pass_id(session: Session, index: int) -> str:

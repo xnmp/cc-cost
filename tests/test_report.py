@@ -36,6 +36,13 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
                                     "message",
                                     "Explain the selected tokens",
                                 ),
+                                ContentBlock(
+                                    "tool",
+                                    "tool_result",
+                                    "File contents",
+                                    label="call-1",
+                                    call_id="call-1",
+                                ),
                             ),
                             output=(
                                 ContentBlock(
@@ -48,6 +55,7 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
                                     "tool_call",
                                     '{\n  "outer": {\n    "inner": 1\n  }\n}',
                                     label="inspect_json",
+                                    call_id="call-1",
                                 ),
                             ),
                         ),
@@ -88,8 +96,13 @@ def test_reports_expose_user_visible_totals(tmp_path: Path) -> None:
     assert ".trace.assistant" in document
     assert "function jsonTree" in document
     assert "function traceMarkup" in document
+    assert "function inspectionBlocks" in document
+    assert "function toolExchangeMarkup" in document
     assert '<details class="trace tool">' in document
     assert "inspect_json" in document
+    assert '"call_id": "call-1"' in document
+    assert "Arguments" in document
+    assert "Result" in document
 
 
 def test_html_escapes_script_closing_sequences_in_session_labels(tmp_path: Path) -> None:
